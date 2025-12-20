@@ -18,14 +18,14 @@ This section establishes the basic Elixir/Rust project structure with Rustler in
 
 ### 1.1.1 Mix Project Setup
 
-- [ ] **Task 1.1.1 Complete**
+- [x] **Task 1.1.1 Complete**
 
 Create the Elixir project with proper supervision tree structure and configure dependencies for RDF handling and NIF compilation.
 
-- [ ] 1.1.1.1 Create mix project with `mix new triple_store --sup`
-- [ ] 1.1.1.2 Add dependencies: `rdf`, `rustler`, `flow`, `telemetry`
-- [ ] 1.1.1.3 Configure application supervision tree in `lib/triple_store/application.ex`
-- [ ] 1.1.1.4 Create module namespace structure (`TripleStore.Backend`, `TripleStore.Dictionary`, `TripleStore.Index`)
+- [x] 1.1.1.1 Create mix project with `mix new triple_store --sup`
+- [x] 1.1.1.2 Add dependencies: `rdf`, `rustler`, `flow`, `telemetry`
+- [x] 1.1.1.3 Configure application supervision tree in `lib/triple_store/application.ex`
+- [x] 1.1.1.4 Create module namespace structure (`TripleStore.Backend`, `TripleStore.Dictionary`, `TripleStore.Index`)
 
 ### 1.1.2 Rustler NIF Configuration
 
