@@ -234,16 +234,21 @@ The indices use empty values since the key itself encodes the complete triple. T
 
 ### 1.4.1 Key Encoding
 
-- [ ] **Task 1.4.1 Complete**
+- [x] **Task 1.4.1 Complete** (2025-12-21)
 
 Implement the key encoding functions for each index. Keys are 24 bytes (3 x 64-bit IDs) in big-endian format for correct lexicographic ordering.
 
-- [ ] 1.4.1.1 Implement `spo_key(s, p, o)` returning `<<s::64-big, p::64-big, o::64-big>>`
-- [ ] 1.4.1.2 Implement `pos_key(p, o, s)` returning `<<p::64-big, o::64-big, s::64-big>>`
-- [ ] 1.4.1.3 Implement `osp_key(o, s, p)` returning `<<o::64-big, s::64-big, p::64-big>>`
-- [ ] 1.4.1.4 Implement `decode_spo_key(binary)` extracting `{s, p, o}`
-- [ ] 1.4.1.5 Implement `decode_pos_key(binary)` extracting `{p, o, s}`
-- [ ] 1.4.1.6 Implement `decode_osp_key(binary)` extracting `{o, s, p}`
+- [x] 1.4.1.1 Implement `spo_key(s, p, o)` returning `<<s::64-big, p::64-big, o::64-big>>`
+- [x] 1.4.1.2 Implement `pos_key(p, o, s)` returning `<<p::64-big, o::64-big, s::64-big>>`
+- [x] 1.4.1.3 Implement `osp_key(o, s, p)` returning `<<o::64-big, s::64-big, p::64-big>>`
+- [x] 1.4.1.4 Implement `decode_spo_key(binary)` extracting `{s, p, o}`
+- [x] 1.4.1.5 Implement `decode_pos_key(binary)` extracting `{p, o, s}`
+- [x] 1.4.1.6 Implement `decode_osp_key(binary)` extracting `{o, s, p}`
+
+Additional functions implemented:
+- `spo_prefix/1,2`, `pos_prefix/1,2`, `osp_prefix/1,2` for pattern matching
+- `encode_triple_keys/3` for generating all index keys at once
+- `key_to_triple/2` for converting any index key to canonical order
 
 ### 1.4.2 Triple Insert
 
