@@ -142,7 +142,7 @@ Implement RocksDB snapshots for consistent reads during updates. This provides t
 
 ## 1.3 Dictionary Encoding
 
-- [ ] **Section 1.3 Complete**
+- [x] **Section 1.3 Complete** (2025-12-21)
 
 This section implements the dictionary encoding system that maps RDF terms to 64-bit integer IDs. The encoding uses type tags in the high bits to distinguish URIs, blank nodes, literals, and inline-encoded numeric types.
 
@@ -150,14 +150,14 @@ Inline encoding for numeric types (`xsd:integer`, `xsd:decimal`, `xsd:dateTime`)
 
 ### 1.3.1 Term ID Encoding
 
-- [ ] **Task 1.3.1 Complete**
+- [x] **Task 1.3.1 Complete** (2025-12-21)
 
 Define the 64-bit ID encoding scheme with type tags. The high 4 bits encode the term type, leaving 60 bits for the sequence number or inline value.
 
-- [ ] 1.3.1.1 Define type tag constants: `@type_uri (0b0001)`, `@type_bnode (0b0010)`, `@type_literal (0b0011)`, `@type_integer (0b0100)`, `@type_decimal (0b0101)`, `@type_datetime (0b0110)`
-- [ ] 1.3.1.2 Implement `encode_id(type, sequence)` combining type tag and sequence
-- [ ] 1.3.1.3 Implement `decode_id(id)` extracting `{type, sequence}`
-- [ ] 1.3.1.4 Implement `term_type(id)` for quick type checking
+- [x] 1.3.1.1 Define type tag constants: `@type_uri (0b0001)`, `@type_bnode (0b0010)`, `@type_literal (0b0011)`, `@type_integer (0b0100)`, `@type_decimal (0b0101)`, `@type_datetime (0b0110)`
+- [x] 1.3.1.2 Implement `encode_id(type, sequence)` combining type tag and sequence
+- [x] 1.3.1.3 Implement `decode_id(id)` extracting `{type, sequence}`
+- [x] 1.3.1.4 Implement `term_type(id)` for quick type checking
 
 ### 1.3.2 Sequence Counter
 
@@ -207,20 +207,20 @@ Implement inline encoding for numeric types that fit within 60 bits. These value
 
 ### 1.3.6 Unit Tests
 
-- [ ] **Task 1.3.6 Complete**
+- [x] **Task 1.3.6 Complete** (2025-12-21)
 
-- [ ] Test type tag encoding/decoding roundtrip
-- [ ] Test sequence counter increments atomically
-- [ ] Test sequence counter persists across restarts
-- [ ] Test string-to-ID mapping for URIs
-- [ ] Test string-to-ID mapping for blank nodes
-- [ ] Test string-to-ID mapping for typed literals
-- [ ] Test string-to-ID mapping for language-tagged literals
-- [ ] Test ID-to-string reverse lookup
-- [ ] Test inline integer encoding/decoding
-- [ ] Test inline decimal encoding/decoding
-- [ ] Test inline datetime encoding/decoding
-- [ ] Test get_or_create_id idempotency
+- [x] Test type tag encoding/decoding roundtrip (term_id_encoding_test.exs)
+- [x] Test sequence counter increments atomically (sequence_counter_test.exs)
+- [x] Test sequence counter persists across restarts (sequence_counter_test.exs)
+- [x] Test string-to-ID mapping for URIs (string_to_id_test.exs)
+- [x] Test string-to-ID mapping for blank nodes (string_to_id_test.exs)
+- [x] Test string-to-ID mapping for typed literals (string_to_id_test.exs)
+- [x] Test string-to-ID mapping for language-tagged literals (string_to_id_test.exs)
+- [x] Test ID-to-string reverse lookup (id_to_string_test.exs)
+- [x] Test inline integer encoding/decoding (inline_numeric_test.exs)
+- [x] Test inline decimal encoding/decoding (inline_numeric_test.exs)
+- [x] Test inline datetime encoding/decoding (inline_numeric_test.exs)
+- [x] Test get_or_create_id idempotency (string_to_id_test.exs)
 
 ---
 
