@@ -508,4 +508,82 @@ defmodule TripleStore.Dictionary.InlineNumericTest do
       end
     end
   end
+
+  describe "decimal precision edge cases" do
+    test "handles maximum coefficient value" do
+      # Max coefficient is 2^48 - 1 = 281474976710655
+      max_coef = (1 <<< 48) - 1
+      decimal = %Decimal{sign: 1, coef: max_coef, exp: 0}
+
+      assert Dictionary.inline_encodable_decimal?(decimal)
+      {:ok, id} = Dictionary.encode_decimal(decimal)
+      {:ok, decoded} = Dictionary.decode_decimal(id)
+      assert Decimal.eq?(decoded, decimal)
+    end
+
+    test "rejects coefficient exceeding maximum" do
+      # Coefficient just over max
+      too_large = (1 <<< 48)
+      decimal = %Decimal{sign: 1, coef: too_large, exp: 0}
+
+      refute Dictionary.inline_encodable_decimal?(decimal)
+      assert {:error, :out_of_range} = Dictionary.encode_decimal(decimal)
+    end
+
+    test "handles maximum positive exponent" do
+      # Biased exponent max is 2047, so max real exponent is 2047 - 1023 = 1024
+      decimal = %Decimal{sign: 1, coef: 1, exp: 1024}
+
+      assert Dictionary.inline_encodable_decimal?(decimal)
+      {:ok, id} = Dictionary.encode_decimal(decimal)
+      {:ok, decoded} = Dictionary.decode_decimal(id)
+      assert Decimal.eq?(decoded, decimal)
+    end
+
+    test "handles minimum negative exponent" do
+      # Min biased exponent is 0, so min real exponent is -1023
+      decimal = %Decimal{sign: 1, coef: 1, exp: -1023}
+
+      assert Dictionary.inline_encodable_decimal?(decimal)
+      {:ok, id} = Dictionary.encode_decimal(decimal)
+      {:ok, decoded} = Dictionary.decode_decimal(id)
+      assert Decimal.eq?(decoded, decimal)
+    end
+
+    test "rejects exponent exceeding positive maximum" do
+      decimal = %Decimal{sign: 1, coef: 1, exp: 1025}
+
+      refute Dictionary.inline_encodable_decimal?(decimal)
+      assert {:error, :out_of_range} = Dictionary.encode_decimal(decimal)
+    end
+
+    test "rejects exponent below negative minimum" do
+      decimal = %Decimal{sign: 1, coef: 1, exp: -1024}
+
+      refute Dictionary.inline_encodable_decimal?(decimal)
+      assert {:error, :out_of_range} = Dictionary.encode_decimal(decimal)
+    end
+
+    test "preserves precision for common decimal values" do
+      # Test values that would be common in real-world usage
+      test_values = [
+        "0.1",
+        "0.01",
+        "0.001",
+        "123.456",
+        "999999.999999",
+        "-0.000001",
+        "1.23456789012345"
+      ]
+
+      for str <- test_values do
+        decimal = Decimal.new(str)
+        if Dictionary.inline_encodable_decimal?(decimal) do
+          {:ok, id} = Dictionary.encode_decimal(decimal)
+          {:ok, decoded} = Dictionary.decode_decimal(id)
+          assert Decimal.eq?(decoded, decimal), "Precision lost for #{str}"
+        end
+      end
+    end
+  end
 end

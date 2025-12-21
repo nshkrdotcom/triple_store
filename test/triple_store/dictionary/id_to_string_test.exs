@@ -113,6 +113,17 @@ defmodule TripleStore.Dictionary.IdToStringTest do
       binary = <<3, 1, "http://www.w3.org/2001/XMLSchema#integer42"::binary>>
       assert {:error, :invalid_encoding} = IdToString.decode_term(binary)
     end
+
+    test "returns error for language literal without null separator" do
+      # Language literal format is <<3, 2, lang, 0, value>>
+      # Missing the null byte separator
+      assert {:error, :invalid_encoding} = IdToString.decode_term(<<3, 2, "envalue">>)
+    end
+
+    test "returns error for unknown literal subtype" do
+      # Unknown literal subtype (99 is not valid)
+      assert {:error, :invalid_encoding} = IdToString.decode_term(<<3, 99, "value">>)
+    end
   end
 
   # ===========================================================================

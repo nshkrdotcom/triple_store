@@ -395,4 +395,45 @@ defmodule TripleStore.Dictionary.SequenceCounterTest do
       SequenceCounter.stop(counter)
     end
   end
+
+  describe "overflow protection" do
+    test "returns error when sequence counter approaches max", %{db: db} do
+      # Pre-seed the counter to near max value
+      near_max = Dictionary.max_sequence() - 1
+      key = "__seq_counter__uri"
+      :ok = NIF.put(db, :str2id, key, <<near_max::64-big>>)
+
+      {:ok, counter} = SequenceCounter.start_link(db: db)
+
+      # First ID should work (at safety_margin above near_max, so will overflow)
+      # The counter starts at near_max + safety_margin which is > max_sequence
+      # Therefore next_id should fail immediately
+      result = SequenceCounter.next_id(counter, :uri)
+
+      assert result == {:error, :sequence_overflow}
+
+      SequenceCounter.stop(counter)
+    end
+
+    test "rolls back counter on overflow attempt", %{db: db} do
+      # Pre-seed to exactly max - safety_margin - 1 so first ID works but second fails
+      start_val = Dictionary.max_sequence() - Dictionary.safety_margin() - 1
+      key = "__seq_counter__uri"
+      :ok = NIF.put(db, :str2id, key, <<start_val::64-big>>)
+
+      {:ok, counter} = SequenceCounter.start_link(db: db)
+
+      # First ID should succeed (counter is at start_val + safety_margin = max - 1)
+      {:ok, _id} = SequenceCounter.next_id(counter, :uri)
+
+      # Second ID should fail (would be at max_sequence + 1)
+      assert {:error, :sequence_overflow} = SequenceCounter.next_id(counter, :uri)
+
+      # Verify counter was rolled back - current should be at max_sequence
+      {:ok, current} = SequenceCounter.current(counter, :uri)
+      assert current == Dictionary.max_sequence()
+
+      SequenceCounter.stop(counter)
+    end
+  end
 end

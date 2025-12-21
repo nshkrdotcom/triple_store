@@ -35,6 +35,7 @@ defmodule TripleStore.Dictionary.IdToString do
 
   alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Dictionary
+  alias TripleStore.Dictionary.Batch
 
   # ===========================================================================
   # Types
@@ -45,20 +46,6 @@ defmodule TripleStore.Dictionary.IdToString do
 
   @typedoc "Database reference from RocksDB NIF"
   @type db_ref :: reference()
-
-  # ===========================================================================
-  # Constants
-  # ===========================================================================
-
-  # Type prefixes for term encoding (must match StringToId)
-  @prefix_uri 1
-  @prefix_bnode 2
-  @prefix_literal 3
-
-  # Literal subtypes
-  @literal_plain 0
-  @literal_typed 1
-  @literal_lang 2
 
   # ===========================================================================
   # Public API
@@ -124,19 +111,7 @@ defmodule TripleStore.Dictionary.IdToString do
   @spec lookup_terms(db_ref(), [Dictionary.term_id()]) ::
           {:ok, [{:ok, rdf_term()} | :not_found]} | {:error, term()}
   def lookup_terms(db, ids) do
-    results =
-      Enum.reduce_while(ids, {:ok, []}, fn id, {:ok, acc} ->
-        case lookup_term(db, id) do
-          {:ok, term} -> {:cont, {:ok, [{:ok, term} | acc]}}
-          :not_found -> {:cont, {:ok, [:not_found | acc]}}
-          {:error, _} = error -> {:halt, error}
-        end
-      end)
-
-    case results do
-      {:ok, results_list} -> {:ok, Enum.reverse(results_list)}
-      {:error, _} = error -> error
-    end
+    Batch.map_with_early_error(ids, &lookup_term(db, &1))
   end
 
   @doc """
@@ -163,19 +138,23 @@ defmodule TripleStore.Dictionary.IdToString do
       {:ok, RDF.literal("hello", language: "en")}
   """
   @spec decode_term(binary()) :: {:ok, rdf_term()} | {:error, :invalid_encoding}
-  def decode_term(<<@prefix_uri, uri_string::binary>>) do
-    {:ok, RDF.iri(uri_string)}
+  def decode_term(<<prefix, rest::binary>>) when prefix == 1 do
+    # URI (prefix_uri = 1)
+    {:ok, RDF.iri(rest)}
   end
 
-  def decode_term(<<@prefix_bnode, bnode_id::binary>>) do
-    {:ok, RDF.bnode(bnode_id)}
+  def decode_term(<<prefix, rest::binary>>) when prefix == 2 do
+    # BNode (prefix_bnode = 2)
+    {:ok, RDF.bnode(rest)}
   end
 
-  def decode_term(<<@prefix_literal, @literal_plain, value::binary>>) do
+  def decode_term(<<prefix, subtype, value::binary>>) when prefix == 3 and subtype == 0 do
+    # Plain literal (prefix_literal = 3, literal_plain = 0)
     {:ok, RDF.literal(value)}
   end
 
-  def decode_term(<<@prefix_literal, @literal_typed, rest::binary>>) do
+  def decode_term(<<prefix, subtype, rest::binary>>) when prefix == 3 and subtype == 1 do
+    # Typed literal (prefix_literal = 3, literal_typed = 1)
     case split_at_null(rest) do
       {datatype_uri, value} ->
         {:ok, RDF.literal(value, datatype: RDF.iri(datatype_uri))}
@@ -185,7 +164,8 @@ defmodule TripleStore.Dictionary.IdToString do
     end
   end
 
-  def decode_term(<<@prefix_literal, @literal_lang, rest::binary>>) do
+  def decode_term(<<prefix, subtype, rest::binary>>) when prefix == 3 and subtype == 2 do
+    # Language-tagged literal (prefix_literal = 3, literal_lang = 2)
     case split_at_null(rest) do
       {lang_tag, value} ->
         {:ok, RDF.literal(value, language: lang_tag)}

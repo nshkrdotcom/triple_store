@@ -471,4 +471,34 @@ defmodule TripleStore.Dictionary.StringToIdTest do
       assert id1 == id2
     end
   end
+
+  describe "Manager initialization" do
+    test "fails gracefully when database reference is invalid" do
+      # Create a fake/invalid reference
+      invalid_db = make_ref()
+
+      # The Manager traps the exit and returns an error tuple
+      # Use Process.flag to trap exits so the test doesn't crash
+      Process.flag(:trap_exit, true)
+
+      # Start Manager with invalid db - should fail during init
+      result = Manager.start_link(db: invalid_db)
+
+      # The Manager should fail to start because SequenceCounter can't load
+      # It either returns an error tuple or crashes (which we've trapped)
+      case result do
+        {:error, _reason} ->
+          # Expected graceful failure
+          :ok
+
+        {:ok, pid} ->
+          # If it started, it should crash shortly - receive the exit signal
+          receive do
+            {:EXIT, ^pid, _reason} -> :ok
+          after
+            1000 -> flunk("Manager did not crash as expected")
+          end
+      end
+    end
+  end
 end

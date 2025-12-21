@@ -120,6 +120,17 @@ defmodule TripleStore.Dictionary do
   @type_decimal 0b0101
   @type_datetime 0b0110
 
+  # Term encoding prefix constants (shared with StringToId/IdToString)
+  # These are used to serialize RDF terms to binary keys
+  @prefix_uri 1
+  @prefix_bnode 2
+  @prefix_literal 3
+
+  # Literal subtype constants (shared with StringToId/IdToString)
+  @literal_plain 0
+  @literal_typed 1
+  @literal_lang 2
+
   # Sequence counter constants
   @max_sequence (1 <<< 59) - 1
   @flush_interval 1000
@@ -294,6 +305,52 @@ defmodule TripleStore.Dictionary do
   """
   @spec min_inline_integer() :: integer()
   def min_inline_integer, do: @min_inline_integer
+
+  # ===========================================================================
+  # Term Encoding Prefix Accessors (for StringToId/IdToString)
+  # ===========================================================================
+
+  @doc """
+  Returns the binary prefix for URI term encoding.
+
+  Used in str2id/id2str column families.
+  """
+  @spec prefix_uri() :: non_neg_integer()
+  def prefix_uri, do: @prefix_uri
+
+  @doc """
+  Returns the binary prefix for blank node term encoding.
+
+  Used in str2id/id2str column families.
+  """
+  @spec prefix_bnode() :: non_neg_integer()
+  def prefix_bnode, do: @prefix_bnode
+
+  @doc """
+  Returns the binary prefix for literal term encoding.
+
+  Used in str2id/id2str column families.
+  """
+  @spec prefix_literal() :: non_neg_integer()
+  def prefix_literal, do: @prefix_literal
+
+  @doc """
+  Returns the subtype marker for plain literals (no datatype).
+  """
+  @spec literal_plain() :: non_neg_integer()
+  def literal_plain, do: @literal_plain
+
+  @doc """
+  Returns the subtype marker for typed literals.
+  """
+  @spec literal_typed() :: non_neg_integer()
+  def literal_typed, do: @literal_typed
+
+  @doc """
+  Returns the subtype marker for language-tagged literals.
+  """
+  @spec literal_lang() :: non_neg_integer()
+  def literal_lang, do: @literal_lang
 
   # ===========================================================================
   # ID Encoding/Decoding (Task 1.3.1)
@@ -887,35 +944,35 @@ defmodule TripleStore.Dictionary do
   # ===========================================================================
 
   @doc """
-  Looks up multiple term IDs from a list of term binaries.
+  Looks up multiple term IDs from a list of RDF terms.
 
   This is a batch version of `lookup_id/2` for efficient bulk operations.
+  Delegates to `StringToId.lookup_ids/2`.
 
   ## Arguments
 
   - `db` - Database reference
-  - `terms` - List of term binaries
+  - `terms` - List of RDF terms
 
   ## Returns
 
   - `{:ok, results}` where results is a list of `{:ok, id}` or `:not_found`
   - `{:error, reason}` on database error
 
-  ## Note
+  ## Examples
 
-  This function signature is defined for Task 1.3.3 implementation.
+      iex> Dictionary.lookup_ids(db, [uri1, uri2, bnode1])
+      {:ok, [{:ok, 123}, {:ok, 456}, :not_found]}
   """
-  @spec lookup_ids(db_ref(), [binary()]) ::
+  @spec lookup_ids(db_ref(), [rdf_term()]) ::
           {:ok, [{:ok, term_id()} | :not_found]} | {:error, term()}
-  def lookup_ids(_db, _terms) do
-    # Placeholder for Task 1.3.3 implementation
-    {:error, :not_implemented}
-  end
+  defdelegate lookup_ids(db, terms), to: TripleStore.Dictionary.StringToId
 
   @doc """
   Looks up multiple terms from a list of term IDs.
 
   This is a batch version of `lookup_term/2` for efficient result serialization.
+  Delegates to `IdToString.lookup_terms/2`.
 
   ## Arguments
 
@@ -931,22 +988,25 @@ defmodule TripleStore.Dictionary do
 
   For inline-encoded IDs (integers, decimals, datetimes), the values are
   computed directly without database lookup.
+
+  ## Examples
+
+      iex> Dictionary.lookup_terms(db, [uri_id, bnode_id, integer_id])
+      {:ok, [{:ok, %RDF.IRI{...}}, {:ok, %RDF.BlankNode{...}}, {:ok, RDF.literal(42)}]}
   """
   @spec lookup_terms(db_ref(), [term_id()]) ::
-          {:ok, [{:ok, term()} | :not_found]} | {:error, term()}
-  def lookup_terms(_db, _ids) do
-    # Placeholder for Task 1.3.4 implementation
-    {:error, :not_implemented}
-  end
+          {:ok, [{:ok, rdf_term()} | :not_found]} | {:error, term()}
+  defdelegate lookup_terms(db, ids), to: TripleStore.Dictionary.IdToString
 
   @doc """
   Gets or creates IDs for multiple terms atomically.
 
   This is a batch version of `get_or_create_id/2` for efficient bulk loading.
+  Delegates to `Manager.get_or_create_ids/2`.
 
   ## Arguments
 
-  - `db` - Database reference
+  - `manager` - Manager process reference (GenServer pid or name)
   - `terms` - List of RDF terms
 
   ## Returns
@@ -956,15 +1016,18 @@ defmodule TripleStore.Dictionary do
 
   ## Concurrency
 
-  This operation is serialized through the Dictionary GenServer to ensure
-  atomic create-if-not-exists semantics for all terms in the batch.
+  This operation is serialized through the Dictionary Manager GenServer to
+  ensure atomic create-if-not-exists semantics for all terms in the batch.
+
+  ## Examples
+
+      iex> {:ok, manager} = Manager.start_link(db: db)
+      iex> Dictionary.get_or_create_ids(manager, [uri1, uri2, bnode1])
+      {:ok, [123, 456, 789]}
   """
-  @spec get_or_create_ids(db_ref(), [rdf_term()]) ::
+  @spec get_or_create_ids(GenServer.server(), [rdf_term()]) ::
           {:ok, [term_id()]} | {:error, term()}
-  def get_or_create_ids(_db, _terms) do
-    # Placeholder for Task 1.3.3 implementation
-    {:error, :not_implemented}
-  end
+  defdelegate get_or_create_ids(manager, terms), to: TripleStore.Dictionary.Manager
 
   # ===========================================================================
   # Private Helper Functions
@@ -980,7 +1043,9 @@ defmodule TripleStore.Dictionary do
   defp tag_to_type(_), do: :unknown
 
   @spec contains_null_byte?(binary()) :: boolean()
-  defp contains_null_byte?(<<>>), do: false
-  defp contains_null_byte?(<<0, _rest::binary>>), do: true
-  defp contains_null_byte?(<<_, rest::binary>>), do: contains_null_byte?(rest)
+  defp contains_null_byte?(binary) do
+    # Use :binary.match BIF for O(n) performance on large binaries
+    # This is more efficient than recursive pattern matching
+    :binary.match(binary, <<0>>) != :nomatch
+  end
 end

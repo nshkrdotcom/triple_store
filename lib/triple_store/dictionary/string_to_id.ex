@@ -37,6 +37,7 @@ defmodule TripleStore.Dictionary.StringToId do
 
   alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Dictionary
+  alias TripleStore.Dictionary.Batch
 
   # ===========================================================================
   # Types
@@ -47,20 +48,6 @@ defmodule TripleStore.Dictionary.StringToId do
 
   @typedoc "Database reference from RocksDB NIF"
   @type db_ref :: reference()
-
-  # ===========================================================================
-  # Constants
-  # ===========================================================================
-
-  # Type prefixes for term encoding
-  @prefix_uri 1
-  @prefix_bnode 2
-  @prefix_literal 3
-
-  # Literal subtypes
-  @literal_plain 0
-  @literal_typed 1
-  @literal_lang 2
 
   # ===========================================================================
   # Public API
@@ -104,7 +91,7 @@ defmodule TripleStore.Dictionary.StringToId do
     case Dictionary.validate_term(uri_string, :uri) do
       :ok ->
         normalized = Dictionary.normalize_unicode(uri_string)
-        {:ok, <<@prefix_uri, normalized::binary>>}
+        {:ok, <<Dictionary.prefix_uri(), normalized::binary>>}
 
       {:error, _} = error ->
         error
@@ -116,7 +103,7 @@ defmodule TripleStore.Dictionary.StringToId do
 
     case Dictionary.validate_term(id_string, :bnode) do
       :ok ->
-        {:ok, <<@prefix_bnode, id_string::binary>>}
+        {:ok, <<Dictionary.prefix_bnode(), id_string::binary>>}
 
       {:error, _} = error ->
         error
@@ -128,7 +115,7 @@ defmodule TripleStore.Dictionary.StringToId do
       :ok ->
         normalized_value = Dictionary.normalize_unicode(value)
         lang_tag = String.downcase(lang)
-        {:ok, <<@prefix_literal, @literal_lang, lang_tag::binary, 0, normalized_value::binary>>}
+        {:ok, <<Dictionary.prefix_literal(), Dictionary.literal_lang(), lang_tag::binary, 0, normalized_value::binary>>}
 
       {:error, _} = error ->
         error
@@ -142,7 +129,7 @@ defmodule TripleStore.Dictionary.StringToId do
       :ok ->
         normalized_value = Dictionary.normalize_unicode(value_string)
         datatype_uri = datatype_mod.id() |> to_string()
-        {:ok, <<@prefix_literal, @literal_typed, datatype_uri::binary, 0, normalized_value::binary>>}
+        {:ok, <<Dictionary.prefix_literal(), Dictionary.literal_typed(), datatype_uri::binary, 0, normalized_value::binary>>}
 
       {:error, _} = error ->
         error
@@ -154,7 +141,7 @@ defmodule TripleStore.Dictionary.StringToId do
     case Dictionary.validate_term(value, :literal) do
       :ok ->
         normalized_value = Dictionary.normalize_unicode(value)
-        {:ok, <<@prefix_literal, @literal_plain, normalized_value::binary>>}
+        {:ok, <<Dictionary.prefix_literal(), Dictionary.literal_plain(), normalized_value::binary>>}
 
       {:error, _} = error ->
         error
@@ -230,19 +217,7 @@ defmodule TripleStore.Dictionary.StringToId do
   @spec lookup_ids(db_ref(), [rdf_term()]) ::
           {:ok, [{:ok, Dictionary.term_id()} | :not_found]} | {:error, term()}
   def lookup_ids(db, terms) do
-    results =
-      Enum.reduce_while(terms, {:ok, []}, fn term, {:ok, acc} ->
-        case lookup_id(db, term) do
-          {:ok, id} -> {:cont, {:ok, [{:ok, id} | acc]}}
-          :not_found -> {:cont, {:ok, [:not_found | acc]}}
-          {:error, _} = error -> {:halt, error}
-        end
-      end)
-
-    case results do
-      {:ok, results_list} -> {:ok, Enum.reverse(results_list)}
-      {:error, _} = error -> error
-    end
+    Batch.map_with_early_error(terms, &lookup_id(db, &1))
   end
 
   # ===========================================================================

@@ -206,6 +206,7 @@ defmodule TripleStore.Dictionary.SequenceCounter do
 
   @impl true
   def handle_call({:next_id, type}, _from, state) do
+    start_time = System.monotonic_time()
     type_index = @type_indices[type]
     type_tag = type_to_tag(type)
 
@@ -216,6 +217,13 @@ defmodule TripleStore.Dictionary.SequenceCounter do
     if new_seq > Dictionary.max_sequence() do
       # Roll back the increment
       :atomics.sub(state.counter_ref, type_index, 1)
+
+      :telemetry.execute(
+        [:triple_store, :dictionary, :sequence_overflow],
+        %{count: 1},
+        %{type: type}
+      )
+
       {:reply, {:error, :sequence_overflow}, state}
     else
       # Create the full term ID
@@ -223,6 +231,14 @@ defmodule TripleStore.Dictionary.SequenceCounter do
 
       # Update allocation count and maybe flush
       state = maybe_flush_counter(state, type, new_seq)
+
+      duration = System.monotonic_time() - start_time
+
+      :telemetry.execute(
+        [:triple_store, :dictionary, :id_allocated],
+        %{duration: duration, sequence: new_seq},
+        %{type: type}
+      )
 
       {:reply, {:ok, term_id}, state}
     end
@@ -237,12 +253,28 @@ defmodule TripleStore.Dictionary.SequenceCounter do
 
   @impl true
   def handle_call(:flush, _from, state) do
+    start_time = System.monotonic_time()
+
     case flush_all_counters(state) do
       :ok ->
+        duration = System.monotonic_time() - start_time
+
+        :telemetry.execute(
+          [:triple_store, :dictionary, :counter_flush],
+          %{duration: duration},
+          %{success: true}
+        )
+
         new_allocations = %{uri: 0, bnode: 0, literal: 0}
         {:reply, :ok, %{state | allocations_since_flush: new_allocations}}
 
       {:error, _reason} = error ->
+        :telemetry.execute(
+          [:triple_store, :dictionary, :counter_flush],
+          %{duration: System.monotonic_time() - start_time},
+          %{success: false, error: error}
+        )
+
         {:reply, error, state}
     end
   end

@@ -23,6 +23,7 @@ defmodule TripleStore.Dictionary.Manager do
 
   alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Dictionary
+  alias TripleStore.Dictionary.Batch
   alias TripleStore.Dictionary.SequenceCounter
   alias TripleStore.Dictionary.StringToId
 
@@ -131,13 +132,31 @@ defmodule TripleStore.Dictionary.Manager do
 
   @impl true
   def handle_call({:get_or_create_id, term}, _from, state) do
+    start_time = System.monotonic_time()
     result = do_get_or_create_id(state.db, state.counter, term)
+    duration = System.monotonic_time() - start_time
+
+    :telemetry.execute(
+      [:triple_store, :dictionary, :get_or_create],
+      %{duration: duration, count: 1},
+      %{success: match?({:ok, _}, result), batch: false}
+    )
+
     {:reply, result, state}
   end
 
   @impl true
   def handle_call({:get_or_create_ids, terms}, _from, state) do
+    start_time = System.monotonic_time()
     result = do_get_or_create_ids(state.db, state.counter, terms)
+    duration = System.monotonic_time() - start_time
+
+    :telemetry.execute(
+      [:triple_store, :dictionary, :get_or_create],
+      %{duration: duration, count: length(terms)},
+      %{success: match?({:ok, _}, result), batch: true}
+    )
+
     {:reply, result, state}
   end
 
@@ -196,18 +215,7 @@ defmodule TripleStore.Dictionary.Manager do
   @spec do_get_or_create_ids(reference(), SequenceCounter.counter(), [rdf_term()]) ::
           {:ok, [Dictionary.term_id()]} | {:error, term()}
   defp do_get_or_create_ids(db, counter, terms) do
-    results =
-      Enum.reduce_while(terms, {:ok, []}, fn term, {:ok, acc} ->
-        case do_get_or_create_id(db, counter, term) do
-          {:ok, id} -> {:cont, {:ok, [id | acc]}}
-          {:error, _} = error -> {:halt, error}
-        end
-      end)
-
-    case results do
-      {:ok, ids} -> {:ok, Enum.reverse(ids)}
-      {:error, _} = error -> error
-    end
+    Batch.map_collect_success(terms, &do_get_or_create_id(db, counter, &1))
   end
 
   @spec get_term_type(rdf_term()) :: :uri | :bnode | :literal
