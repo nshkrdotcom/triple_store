@@ -60,9 +60,9 @@ Extend Leapfrog to handle multiple variables through nested iteration.
 - [ ] 3.1.4.2 Implement ascent on exhaustion of lower level
 - [ ] 3.1.4.3 Produce complete bindings for all variables
 
-### Unit Tests - Section 3.1
+### 3.1.5 Unit Tests
 
-- [ ] **Unit Tests 3.1 Complete**
+- [ ] **Task 3.1.5 Complete**
 
 - [ ] Test trie iterator seek positions correctly
 - [ ] Test trie iterator next advances correctly
@@ -124,9 +124,9 @@ Cache optimized plans for repeated queries.
 - [ ] 3.2.4.3 Invalidate on statistics change or schema modification
 - [ ] 3.2.4.4 Implement LRU eviction policy
 
-### Unit Tests - Section 3.2
+### 3.2.5 Unit Tests
 
-- [ ] **Unit Tests 3.2 Complete**
+- [ ] **Task 3.2.5 Complete**
 
 - [ ] Test cardinality estimation for single pattern
 - [ ] Test cardinality estimation for join
@@ -179,9 +179,9 @@ Implement the public UPDATE API.
 - [ ] 3.3.3.3 Implement `TripleStore.delete(db, triples)` for direct delete
 - [ ] 3.3.3.4 Return affected triple count
 
-### Unit Tests - Section 3.3
+### 3.3.4 Unit Tests
 
-- [ ] **Unit Tests 3.3 Complete**
+- [ ] **Task 3.3.4 Complete**
 
 - [ ] Test INSERT DATA adds triples
 - [ ] Test DELETE DATA removes triples
@@ -233,9 +233,9 @@ Optimize common property path patterns.
 - [ ] 3.4.3.2 Use bidirectional search when both endpoints bound
 - [ ] 3.4.3.3 Consider materialized path indices (optional)
 
-### Unit Tests - Section 3.4
+### 3.4.4 Unit Tests
 
-- [ ] **Unit Tests 3.4 Complete**
+- [ ] **Task 3.4.4 Complete**
 
 - [ ] Test sequence path traversal
 - [ ] Test alternative path branches correctly

@@ -59,9 +59,9 @@ Define and validate performance targets.
 - [ ] 5.1.4.3 Bulk load: >100K triples/second
 - [ ] 5.1.4.4 BSBM overall: <50ms p95 for query mix
 
-### Unit Tests - Section 5.1
+### 5.1.5 Unit Tests
 
-- [ ] **Unit Tests 5.1 Complete**
+- [ ] **Task 5.1.5 Complete**
 
 - [ ] Test LUBM generator produces valid RDF
 - [ ] Test BSBM generator produces valid RDF
@@ -120,9 +120,9 @@ Tune individual column families for their access patterns.
 - [ ] 5.2.4.3 Configure block sizes per access pattern
 - [ ] 5.2.4.4 Document per-CF tuning rationale
 
-### Unit Tests - Section 5.2
+### 5.2.5 Unit Tests
 
-- [ ] **Unit Tests 5.2 Complete**
+- [ ] **Task 5.2.5 Complete**
 
 - [ ] Test configuration loads without errors
 - [ ] Test bloom filters reduce negative lookups
@@ -169,9 +169,9 @@ Support cache warming on startup.
 - [ ] 5.3.3.2 Restore cache on startup (optional)
 - [ ] 5.3.3.3 Pre-execute common queries on startup
 
-### Unit Tests - Section 5.3
+### 5.3.4 Unit Tests
 
-- [ ] **Unit Tests 5.3 Complete**
+- [ ] **Task 5.3.4 Complete**
 
 - [ ] Test cache stores and retrieves results
 - [ ] Test cache evicts LRU entries at capacity
@@ -230,9 +230,9 @@ Support Prometheus metrics export.
 - [ ] 5.4.4.3 Document Grafana dashboard setup
 - [ ] 5.4.4.4 Provide example alerting rules
 
-### Unit Tests - Section 5.4
+### 5.4.5 Unit Tests
 
-- [ ] **Unit Tests 5.4 Complete**
+- [ ] **Task 5.4.5 Complete**
 
 - [ ] Test telemetry events emitted for queries
 - [ ] Test telemetry events emitted for updates
@@ -280,9 +280,9 @@ Support scheduled periodic backups.
 - [ ] 5.5.3.3 Report backup status via telemetry
 - [ ] 5.5.3.4 Handle backup failures gracefully
 
-### Unit Tests - Section 5.5
+### 5.5.4 Unit Tests
 
-- [ ] **Unit Tests 5.5 Complete**
+- [ ] **Task 5.5.4 Complete**
 
 - [ ] Test backup creates valid checkpoint
 - [ ] Test restore produces identical database
@@ -335,9 +335,9 @@ Implement consistent error handling.
 - [ ] 5.6.3.3 Provide `!` variants that raise on error
 - [ ] 5.6.3.4 Include helpful error messages
 
-### Unit Tests - Section 5.6
+### 5.6.4 Unit Tests
 
-- [ ] **Unit Tests 5.6 Complete**
+- [ ] **Task 5.6.4 Complete**
 
 - [ ] Test all public functions have documentation
 - [ ] Test all public functions have specs

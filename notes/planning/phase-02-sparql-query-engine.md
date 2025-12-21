@@ -62,9 +62,9 @@ Implement comprehensive error handling with informative messages.
 - [ ] 2.1.4.3 Handle prefix resolution errors
 - [ ] 2.1.4.4 Validate variable scoping
 
-### Unit Tests - Section 2.1
+### 2.1.5 Unit Tests
 
-- [ ] **Unit Tests 2.1 Complete**
+- [ ] **Task 2.1.5 Complete**
 
 - [ ] Test simple SELECT query parsing
 - [ ] Test SELECT with multiple variables
@@ -130,9 +130,9 @@ Compile SPARQL expressions (FILTER conditions, BIND expressions) to evaluable fo
 - [ ] 2.2.3.4 Implement built-in functions (STR, LANG, DATATYPE, BOUND, etc.)
 - [ ] 2.2.3.5 Implement aggregate functions (COUNT, SUM, AVG, MIN, MAX, GROUP_CONCAT)
 
-### Unit Tests - Section 2.2
+### 2.2.4 Unit Tests
 
-- [ ] **Unit Tests 2.2 Complete**
+- [ ] **Task 2.2.4 Complete**
 
 - [ ] Test BGP algebra node creation
 - [ ] Test join algebra from multiple patterns
@@ -195,9 +195,9 @@ Combine optimizations into a pipeline applied to all queries.
 - [ ] 2.3.4.3 Add optimization logging for debugging
 - [ ] 2.3.4.4 Handle optimization bypass for EXPLAIN queries
 
-### Unit Tests - Section 2.3
+### 2.3.5 Unit Tests
 
-- [ ] **Unit Tests 2.3 Complete**
+- [ ] **Task 2.3.5 Complete**
 
 - [ ] Test filter push-down past join
 - [ ] Test filter push-down stops at OPTIONAL
@@ -281,9 +281,9 @@ Serialize execution results to final output format.
 - [ ] 2.4.6.3 Implement ASK result as boolean
 - [ ] 2.4.6.4 Implement DESCRIBE result as `RDF.Graph` with CBD
 
-### Unit Tests - Section 2.4
+### 2.4.7 Unit Tests
 
-- [ ] **Unit Tests 2.4 Complete**
+- [ ] **Task 2.4.7 Complete**
 
 - [ ] Test BGP execution with single pattern
 - [ ] Test BGP execution with multiple patterns
@@ -339,9 +339,9 @@ Support prepared queries with parameter binding.
 - [ ] 2.5.3.2 Implement `TripleStore.execute(db, prepared, params)` with bindings
 - [ ] 2.5.3.3 Cache parsed/optimized algebra for prepared queries
 
-### Unit Tests - Section 2.5
+### 2.5.4 Unit Tests
 
-- [ ] **Unit Tests 2.5 Complete**
+- [ ] **Task 2.5.4 Complete**
 
 - [ ] Test query returns correct results
 - [ ] Test query with timeout terminates
@@ -382,9 +382,9 @@ Implement standard aggregate functions.
 - [ ] 2.6.2.6 Implement `SAMPLE(expr)` returning arbitrary value
 - [ ] 2.6.2.7 Support DISTINCT modifier for aggregates
 
-### Unit Tests - Section 2.6
+### 2.6.3 Unit Tests
 
-- [ ] **Unit Tests 2.6 Complete**
+- [ ] **Task 2.6.3 Complete**
 
 - [ ] Test GROUP BY single variable
 - [ ] Test GROUP BY multiple variables

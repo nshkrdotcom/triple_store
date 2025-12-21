@@ -68,9 +68,9 @@ Optimize rules for efficient evaluation.
 - [ ] 4.1.4.2 Identify rules that can be batched together
 - [ ] 4.1.4.3 Detect rules that cannot fire given current schema
 
-### Unit Tests - Section 4.1
+### 4.1.5 Unit Tests
 
-- [ ] **Unit Tests 4.1 Complete**
+- [ ] **Task 4.1.5 Complete**
 
 - [ ] Test rule representation captures patterns correctly
 - [ ] Test subClassOf rule produces correct inferences
@@ -134,9 +134,9 @@ Store derived facts distinctly from explicit facts.
 - [ ] 4.2.4.3 Support querying derived facts only
 - [ ] 4.2.4.4 Support clearing all derived facts (rematerialization)
 
-### Unit Tests - Section 4.2
+### 4.2.5 Unit Tests
 
-- [ ] **Unit Tests 4.2 Complete**
+- [ ] **Task 4.2.5 Complete**
 
 - [ ] Test delta computation finds new facts only
 - [ ] Test fixpoint terminates correctly
@@ -194,9 +194,9 @@ Implement complete deletion with reasoning.
 - [ ] 4.3.4.3 Handle cascading deletions correctly
 - [ ] 4.3.4.4 Optimize for bulk deletions
 
-### Unit Tests - Section 4.3
+### 4.3.5 Unit Tests
 
-- [ ] **Unit Tests 4.3 Complete**
+- [ ] **Task 4.3.5 Complete**
 
 - [ ] Test incremental addition derives new consequences
 - [ ] Test backward trace finds dependent derivations
@@ -245,9 +245,9 @@ Handle updates to TBox requiring hierarchy recomputation.
 - [ ] 4.4.3.2 Trigger hierarchy recomputation on TBox changes
 - [ ] 4.4.3.3 Optionally trigger full rematerialization
 
-### Unit Tests - Section 4.4
+### 4.4.4 Unit Tests
 
-- [ ] **Unit Tests 4.4 Complete**
+- [ ] **Task 4.4.4 Complete**
 
 - [ ] Test class hierarchy computed correctly
 - [ ] Test superclasses returns transitive closure
@@ -295,9 +295,9 @@ Provide reasoning status information.
 - [ ] 4.5.3.3 Report last materialization time
 - [ ] 4.5.3.4 Report active profile and mode
 
-### Unit Tests - Section 4.5
+### 4.5.4 Unit Tests
 
-- [ ] **Unit Tests 4.5 Complete**
+- [ ] **Task 4.5.4 Complete**
 
 - [ ] Test RDFS profile applies subset of rules
 - [ ] Test OWL 2 RL profile applies full rule set

@@ -12,7 +12,7 @@ This phase integrates with the existing `rdf` hex package for RDF parsing and da
 
 ## 1.1 Project Scaffolding
 
-- [ ] **Section 1.1 Complete**
+- [x] **Section 1.1 Complete**
 
 This section establishes the basic Elixir/Rust project structure with Rustler integration. We create the mix project, configure Rustler for NIF compilation, and set up the Rust crate structure for RocksDB integration.
 
@@ -49,14 +49,14 @@ Set up development tooling including code formatting, testing infrastructure, an
 - [ ] 1.1.3.3 Configure `mix.exs` for documentation with ExDoc
 - [ ] 1.1.3.4 Create `test/support/` helpers for test fixtures
 
-### Unit Tests - Section 1.1
+### 1.1.4 Unit Tests
 
-- [ ] **Unit Tests 1.1 Complete**
+- [x] **Task 1.1.4 Complete**
 
-- [ ] Test mix project compiles without errors
-- [ ] Test Rustler NIF loads successfully
-- [ ] Test supervision tree starts correctly
-- [ ] Test module namespaces are properly defined
+- [x] Test mix project compiles without errors
+- [x] Test Rustler NIF loads successfully
+- [x] Test supervision tree starts correctly
+- [x] Test module namespaces are properly defined
 
 ---
 
@@ -125,9 +125,9 @@ Implement RocksDB snapshots for consistent reads during updates. This provides t
 - [ ] 1.2.5.3 Implement `prefix_iterator_snapshot(snapshot, cf, prefix)`
 - [ ] 1.2.5.4 Implement `release_snapshot(snapshot)` for cleanup
 
-### Unit Tests - Section 1.2
+### 1.2.6 Unit Tests
 
-- [ ] **Unit Tests 1.2 Complete**
+- [ ] **Task 1.2.6 Complete**
 
 - [ ] Test database opens and closes without leaks
 - [ ] Test column families are created correctly
@@ -205,9 +205,9 @@ Implement inline encoding for numeric types that fit within 60 bits. These value
 - [ ] 1.3.5.4 Implement `decode_inline(id)` reconstructing original value
 - [ ] 1.3.5.5 Implement `inline_encodable?(term)` predicate
 
-### Unit Tests - Section 1.3
+### 1.3.6 Unit Tests
 
-- [ ] **Unit Tests 1.3 Complete**
+- [ ] **Task 1.3.6 Complete**
 
 - [ ] Test type tag encoding/decoding roundtrip
 - [ ] Test sequence counter increments atomically
@@ -294,9 +294,9 @@ Implement the lookup function that returns a stream of matching triples for a gi
 - [ ] 1.4.5.4 Implement post-filtering for `{:bound, :var, :bound}` pattern
 - [ ] 1.4.5.5 Implement `triple_exists?(db, {s, p, o})` for existence check
 
-### Unit Tests - Section 1.4
+### 1.4.6 Unit Tests
 
-- [ ] **Unit Tests 1.4 Complete**
+- [ ] **Task 1.4.6 Complete**
 
 - [ ] Test SPO key encoding/decoding roundtrip
 - [ ] Test POS key encoding/decoding roundtrip
@@ -373,9 +373,9 @@ Implement export functions to serialize stored triples back to RDF formats.
 - [ ] 1.5.4.3 Implement `export_file(db, path, format)` writing to file
 - [ ] 1.5.4.4 Support streaming export for large datasets
 
-### Unit Tests - Section 1.5
+### 1.5.5 Unit Tests
 
-- [ ] **Unit Tests 1.5 Complete**
+- [ ] **Task 1.5.5 Complete**
 
 - [ ] Test IRI conversion roundtrip
 - [ ] Test blank node conversion roundtrip
@@ -420,9 +420,9 @@ Implement caching for statistics to avoid repeated scans.
 - [ ] 1.6.2.3 Implement invalidation on bulk updates
 - [ ] 1.6.2.4 Store predicate frequency histogram
 
-### Unit Tests - Section 1.6
+### 1.6.3 Unit Tests
 
-- [ ] **Unit Tests 1.6 Complete**
+- [ ] **Task 1.6.3 Complete**
 
 - [ ] Test triple count accuracy
 - [ ] Test predicate count accuracy
