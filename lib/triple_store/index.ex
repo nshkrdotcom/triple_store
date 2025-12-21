@@ -552,4 +552,87 @@ defmodule TripleStore.Index do
     key = spo_key(subject, predicate, object)
     NIF.exists(db, :spo, key)
   end
+
+  # ===========================================================================
+  # Triple Delete Operations
+  # ===========================================================================
+
+  @doc """
+  Deletes a single triple from all three indices atomically.
+
+  The triple is removed from SPO, POS, and OSP indices using a single atomic
+  DeleteBatch operation. If the triple does not exist, this is a no-op
+  (idempotent operation).
+
+  ## Arguments
+
+  - `db` - RocksDB database reference
+  - `triple` - Tuple `{subject_id, predicate_id, object_id}` of term IDs
+
+  ## Returns
+
+  - `:ok` on success (even if triple didn't exist)
+  - `{:error, reason}` on failure
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> Index.insert_triple(db, {1, 2, 3})
+      :ok
+      iex> Index.delete_triple(db, {1, 2, 3})
+      :ok
+      iex> Index.triple_exists?(db, {1, 2, 3})
+      {:ok, false}
+
+  """
+  @spec delete_triple(NIF.db_ref(), triple()) :: :ok | {:error, term()}
+  def delete_triple(db, {subject, predicate, object})
+      when is_integer(subject) and is_integer(predicate) and is_integer(object) do
+    operations =
+      for {cf, key} <- encode_triple_keys(subject, predicate, object) do
+        {cf, key}
+      end
+
+    NIF.delete_batch(db, operations)
+  end
+
+  @doc """
+  Deletes multiple triples from all three indices atomically.
+
+  All triples are removed from SPO, POS, and OSP indices using a single atomic
+  DeleteBatch operation. Either all triples are deleted or none are.
+  Non-existent triples are handled idempotently.
+
+  ## Arguments
+
+  - `db` - RocksDB database reference
+  - `triples` - List of `{subject_id, predicate_id, object_id}` tuples
+
+  ## Returns
+
+  - `:ok` on success (even if some triples didn't exist)
+  - `{:error, reason}` on failure
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> triples = [{1, 2, 3}, {4, 5, 6}, {7, 8, 9}]
+      iex> Index.insert_triples(db, triples)
+      :ok
+      iex> Index.delete_triples(db, triples)
+      :ok
+
+  """
+  @spec delete_triples(NIF.db_ref(), [triple()]) :: :ok | {:error, term()}
+  def delete_triples(_db, []), do: :ok
+
+  def delete_triples(db, triples) when is_list(triples) do
+    operations =
+      for {subject, predicate, object} <- triples,
+          {cf, key} <- encode_triple_keys(subject, predicate, object) do
+        {cf, key}
+      end
+
+    NIF.delete_batch(db, operations)
+  end
 end

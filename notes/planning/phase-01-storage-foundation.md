@@ -266,14 +266,14 @@ Additional function implemented:
 
 ### 1.4.3 Triple Delete
 
-- [ ] **Task 1.4.3 Complete**
+- [x] **Task 1.4.3 Complete** (2025-12-21)
 
 Implement triple deletion removing entries from all three indices atomically.
 
-- [ ] 1.4.3.1 Implement `delete_triple(db, {s, p, o})` looking up IDs and removing entries
-- [ ] 1.4.3.2 Implement `delete_triples(db, triples)` for batch deletion
-- [ ] 1.4.3.3 Ensure atomic removal across all three indices
-- [ ] 1.4.3.4 Handle deletion of non-existent triple (no-op)
+- [x] 1.4.3.1 Implement `delete_triple(db, {s, p, o})` looking up IDs and removing entries
+- [x] 1.4.3.2 Implement `delete_triples(db, triples)` for batch deletion
+- [x] 1.4.3.3 Ensure atomic removal across all three indices
+- [x] 1.4.3.4 Handle deletion of non-existent triple (no-op)
 
 ### 1.4.4 Pattern Matching
 
