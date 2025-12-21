@@ -172,15 +172,15 @@ Implement atomic sequence counter for generating unique IDs. We use `:atomics` f
 
 ### 1.3.3 String-to-ID Mapping
 
-- [ ] **Task 1.3.3 Complete**
+- [x] **Task 1.3.3 Complete** (2025-12-21)
 
 Implement the forward mapping from RDF term strings to IDs using the `str2id` column family.
 
-- [ ] 1.3.3.1 Implement `encode_term(term)` serializing term to binary key
-- [ ] 1.3.3.2 Implement `lookup_id(db, term)` returning `{:ok, id}` or `:not_found`
-- [ ] 1.3.3.3 Implement `get_or_create_id(db, term)` with atomic create-if-missing
-- [ ] 1.3.3.4 Handle URI encoding with angle brackets stripped
-- [ ] 1.3.3.5 Handle literal encoding with datatype and language tag
+- [x] 1.3.3.1 Implement `encode_term(term)` serializing term to binary key
+- [x] 1.3.3.2 Implement `lookup_id(db, term)` returning `{:ok, id}` or `:not_found`
+- [x] 1.3.3.3 Implement `get_or_create_id(db, term)` with atomic create-if-missing (via Manager)
+- [x] 1.3.3.4 Handle URI encoding with angle brackets stripped
+- [x] 1.3.3.5 Handle literal encoding with datatype and language tag
 
 ### 1.3.4 ID-to-String Mapping
 
