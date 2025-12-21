@@ -254,4 +254,110 @@ defmodule TripleStore.Backend.RocksDB.NIF do
   """
   @spec exists(db_ref(), column_family(), binary()) :: {:ok, boolean()} | {:error, term()}
   def exists(_db_ref, _cf, _key), do: :erlang.nif_error(:nif_not_loaded)
+
+  # ============================================================================
+  # Batch Operations
+  # ============================================================================
+
+  @type put_operation :: {column_family(), binary(), binary()}
+  @type delete_operation :: {column_family(), binary()}
+  @type mixed_put :: {:put, column_family(), binary(), binary()}
+  @type mixed_delete :: {:delete, column_family(), binary()}
+
+  @doc """
+  Atomically writes multiple key-value pairs to column families.
+
+  Uses RocksDB WriteBatch for atomic commit - either all operations succeed
+  or none do. Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `operations` - List of `{cf, key, value}` tuples
+
+  ## Returns
+  - `:ok` on success
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:batch_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> operations = [
+      ...>   {:id2str, "key1", "value1"},
+      ...>   {:id2str, "key2", "value2"},
+      ...>   {:str2id, "value1", "key1"}
+      ...> ]
+      iex> NIF.write_batch(db, operations)
+      :ok
+
+  """
+  @spec write_batch(db_ref(), [put_operation()]) :: :ok | {:error, term()}
+  def write_batch(_db_ref, _operations), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Atomically deletes multiple keys from column families.
+
+  Uses RocksDB WriteBatch for atomic commit - either all operations succeed
+  or none do. Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `operations` - List of `{cf, key}` tuples
+
+  ## Returns
+  - `:ok` on success
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:batch_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> NIF.write_batch(db, [{:id2str, "key1", "value1"}, {:id2str, "key2", "value2"}])
+      :ok
+      iex> NIF.delete_batch(db, [{:id2str, "key1"}, {:id2str, "key2"}])
+      :ok
+
+  """
+  @spec delete_batch(db_ref(), [delete_operation()]) :: :ok | {:error, term()}
+  def delete_batch(_db_ref, _operations), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Atomically performs mixed put and delete operations.
+
+  Uses RocksDB WriteBatch for atomic commit - either all operations succeed
+  or none do. This is essential for maintaining consistency when updating
+  multiple indices (SPO, POS, OSP) for a single triple.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `operations` - List of operations:
+    - `{:put, cf, key, value}` for puts
+    - `{:delete, cf, key}` for deletes
+
+  ## Returns
+  - `:ok` on success
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:invalid_operation, op}}` if operation type is invalid
+  - `{:error, {:batch_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> operations = [
+      ...>   {:put, :spo, "s1p1o1", ""},
+      ...>   {:put, :pos, "p1o1s1", ""},
+      ...>   {:delete, :spo, "old_key"},
+      ...>   {:delete, :pos, "old_key2"}
+      ...> ]
+      iex> NIF.mixed_batch(db, operations)
+      :ok
+
+  """
+  @spec mixed_batch(db_ref(), [mixed_put() | mixed_delete()]) :: :ok | {:error, term()}
+  def mixed_batch(_db_ref, _operations), do: :erlang.nif_error(:nif_not_loaded)
 end

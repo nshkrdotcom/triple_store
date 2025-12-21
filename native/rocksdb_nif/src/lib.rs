@@ -4,8 +4,8 @@
 //! Elixir application. All I/O operations use dirty CPU schedulers to prevent
 //! blocking the BEAM schedulers.
 
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
-use rustler::{Binary, Encoder, Env, NewBinary, NifResult, Resource, ResourceArc, Term};
+use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
+use rustler::{Binary, Encoder, Env, ListIterator, NewBinary, NifResult, Resource, ResourceArc, Term};
 use std::sync::RwLock;
 
 /// Column family names used by TripleStore
@@ -51,6 +51,11 @@ mod atoms {
         get_failed,
         put_failed,
         delete_failed,
+        batch_failed,
+        invalid_operation,
+        // Operation types for batch - these map to Elixir atoms :put and :delete
+        put,
+        delete,
     }
 }
 
@@ -376,6 +381,289 @@ fn exists<'a>(
         Ok(Some(_)) => Ok((atoms::ok(), true).encode(env)),
         Ok(None) => Ok((atoms::ok(), false).encode(env)),
         Err(e) => Ok((atoms::error(), (atoms::get_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Atomically writes multiple key-value pairs to column families.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `operations` - List of `{cf, key, value}` tuples
+///
+/// # Returns
+/// * `:ok` on success
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:batch_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn write_batch<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    operations: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let mut batch = WriteBatch::default();
+
+    // Parse the list of operations
+    let iter: ListIterator = operations
+        .decode()
+        .map_err(|_| rustler::Error::Term(Box::new("expected list")))?;
+
+    for item in iter {
+        // Each item should be a tuple {cf, key, value}
+        let tuple = rustler::types::tuple::get_tuple(item)
+            .map_err(|_| rustler::Error::Term(Box::new("expected tuple")))?;
+
+        if tuple.len() == 3 {
+            // Simple format: {cf, key, value} - treat as put
+            let cf_atom: rustler::Atom = tuple[0]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected atom for cf")))?;
+            let key: Binary = tuple[1]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for key")))?;
+            let value: Binary = tuple[2]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for value")))?;
+
+            let cf_name = match cf_atom_to_name(cf_atom) {
+                Some(name) => name,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            let cf_handle = match db.cf_handle(cf_name) {
+                Some(cf) => cf,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            batch.put_cf(&cf_handle, key.as_slice(), value.as_slice());
+        } else if tuple.len() == 4 {
+            // Extended format: {:put, cf, key, value}
+            let op_atom: rustler::Atom = tuple[0]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected atom for operation")))?;
+            let cf_atom: rustler::Atom = tuple[1]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected atom for cf")))?;
+            let key: Binary = tuple[2]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for key")))?;
+            let value: Binary = tuple[3]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for value")))?;
+
+            if op_atom != atoms::put() {
+                return Ok((atoms::error(), (atoms::invalid_operation(), op_atom)).encode(env));
+            }
+
+            let cf_name = match cf_atom_to_name(cf_atom) {
+                Some(name) => name,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            let cf_handle = match db.cf_handle(cf_name) {
+                Some(cf) => cf,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            batch.put_cf(&cf_handle, key.as_slice(), value.as_slice());
+        } else {
+            return Ok((atoms::error(), atoms::invalid_operation()).encode(env));
+        }
+    }
+
+    match db.write(batch) {
+        Ok(()) => Ok(atoms::ok().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::batch_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Atomically deletes multiple keys from column families.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `operations` - List of `{cf, key}` tuples
+///
+/// # Returns
+/// * `:ok` on success
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:batch_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn delete_batch<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    operations: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let mut batch = WriteBatch::default();
+
+    // Parse the list of operations
+    let iter: ListIterator = operations
+        .decode()
+        .map_err(|_| rustler::Error::Term(Box::new("expected list")))?;
+
+    for item in iter {
+        // Each item should be a tuple {cf, key}
+        let tuple = rustler::types::tuple::get_tuple(item)
+            .map_err(|_| rustler::Error::Term(Box::new("expected tuple")))?;
+
+        if tuple.len() != 2 {
+            return Ok((atoms::error(), atoms::invalid_operation()).encode(env));
+        }
+
+        let cf_atom: rustler::Atom = tuple[0]
+            .decode()
+            .map_err(|_| rustler::Error::Term(Box::new("expected atom for cf")))?;
+        let key: Binary = tuple[1]
+            .decode()
+            .map_err(|_| rustler::Error::Term(Box::new("expected binary for key")))?;
+
+        let cf_name = match cf_atom_to_name(cf_atom) {
+            Some(name) => name,
+            None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+        };
+
+        let cf_handle = match db.cf_handle(cf_name) {
+            Some(cf) => cf,
+            None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+        };
+
+        batch.delete_cf(&cf_handle, key.as_slice());
+    }
+
+    match db.write(batch) {
+        Ok(()) => Ok(atoms::ok().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::batch_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Atomically performs mixed put and delete operations.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `operations` - List of operations:
+///   - `{:put, cf, key, value}` for puts
+///   - `{:delete, cf, key}` for deletes
+///
+/// # Returns
+/// * `:ok` on success
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:invalid_operation, op}}` if operation type is invalid
+/// * `{:error, {:batch_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn mixed_batch<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    operations: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let mut batch = WriteBatch::default();
+
+    // Parse the list of operations
+    let iter: ListIterator = operations
+        .decode()
+        .map_err(|_| rustler::Error::Term(Box::new("expected list")))?;
+
+    for item in iter {
+        let tuple = rustler::types::tuple::get_tuple(item)
+            .map_err(|_| rustler::Error::Term(Box::new("expected tuple")))?;
+
+        if tuple.is_empty() {
+            return Ok((atoms::error(), atoms::invalid_operation()).encode(env));
+        }
+
+        let op_atom: rustler::Atom = tuple[0]
+            .decode()
+            .map_err(|_| rustler::Error::Term(Box::new("expected atom for operation")))?;
+
+        if op_atom == atoms::put() {
+            // {:put, cf, key, value}
+            if tuple.len() != 4 {
+                return Ok((atoms::error(), atoms::invalid_operation()).encode(env));
+            }
+
+            let cf_atom: rustler::Atom = tuple[1]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected atom for cf")))?;
+            let key: Binary = tuple[2]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for key")))?;
+            let value: Binary = tuple[3]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for value")))?;
+
+            let cf_name = match cf_atom_to_name(cf_atom) {
+                Some(name) => name,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            let cf_handle = match db.cf_handle(cf_name) {
+                Some(cf) => cf,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            batch.put_cf(&cf_handle, key.as_slice(), value.as_slice());
+        } else if op_atom == atoms::delete() {
+            // {:delete, cf, key}
+            if tuple.len() != 3 {
+                return Ok((atoms::error(), atoms::invalid_operation()).encode(env));
+            }
+
+            let cf_atom: rustler::Atom = tuple[1]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected atom for cf")))?;
+            let key: Binary = tuple[2]
+                .decode()
+                .map_err(|_| rustler::Error::Term(Box::new("expected binary for key")))?;
+
+            let cf_name = match cf_atom_to_name(cf_atom) {
+                Some(name) => name,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            let cf_handle = match db.cf_handle(cf_name) {
+                Some(cf) => cf,
+                None => return Ok((atoms::error(), (atoms::invalid_cf(), cf_atom)).encode(env)),
+            };
+
+            batch.delete_cf(&cf_handle, key.as_slice());
+        } else {
+            return Ok((atoms::error(), (atoms::invalid_operation(), op_atom)).encode(env));
+        }
+    }
+
+    match db.write(batch) {
+        Ok(()) => Ok(atoms::ok().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::batch_failed(), e.to_string())).encode(env)),
     }
 }
 

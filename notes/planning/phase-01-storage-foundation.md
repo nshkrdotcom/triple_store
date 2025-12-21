@@ -93,14 +93,14 @@ Implement single key-value operations for each column family. These form the fou
 
 ### 1.2.3 WriteBatch API
 
-- [ ] **Task 1.2.3 Complete**
+- [x] **Task 1.2.3 Complete**
 
 Implement atomic batch writes for multi-index consistency. When inserting a triple, we must write to all three indices atomically.
 
-- [ ] 1.2.3.1 Implement `put_batch(db, operations)` where operations is `[{cf, key, value}]`
-- [ ] 1.2.3.2 Implement `delete_batch(db, operations)` where operations is `[{cf, key}]`
-- [ ] 1.2.3.3 Implement mixed batch with puts and deletes
-- [ ] 1.2.3.4 Ensure atomic commit semantics via RocksDB WriteBatch
+- [x] 1.2.3.1 Implement `put_batch(db, operations)` where operations is `[{cf, key, value}]`
+- [x] 1.2.3.2 Implement `delete_batch(db, operations)` where operations is `[{cf, key}]`
+- [x] 1.2.3.3 Implement mixed batch with puts and deletes
+- [x] 1.2.3.4 Ensure atomic commit semantics via RocksDB WriteBatch
 
 ### 1.2.4 Iterator API
 
