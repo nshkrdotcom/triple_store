@@ -195,15 +195,15 @@ Implement the reverse mapping from IDs to RDF term strings using the `id2str` co
 
 ### 1.3.5 Inline Numeric Encoding
 
-- [ ] **Task 1.3.5 Complete**
+- [x] **Task 1.3.5 Complete** (2025-12-21)
 
 Implement inline encoding for numeric types that fit within 60 bits. These values are encoded directly in the ID without dictionary storage.
 
-- [ ] 1.3.5.1 Implement `encode_integer(n)` for xsd:integer in range [0, 2^59)
-- [ ] 1.3.5.2 Implement `encode_decimal(d)` using fixed-point representation
-- [ ] 1.3.5.3 Implement `encode_datetime(dt)` using Unix timestamp + offset
-- [ ] 1.3.5.4 Implement `decode_inline(id)` reconstructing original value
-- [ ] 1.3.5.5 Implement `inline_encodable?(term)` predicate
+- [x] 1.3.5.1 Implement `encode_integer(n)` for xsd:integer in range [-2^59, 2^59)
+- [x] 1.3.5.2 Implement `encode_decimal(d)` using custom floating-point representation
+- [x] 1.3.5.3 Implement `encode_datetime(dt)` using Unix timestamp (milliseconds)
+- [x] 1.3.5.4 Implement `decode_inline(id)` reconstructing original value
+- [x] 1.3.5.5 Implement `inline_encodable?(term)` predicate for RDF terms
 
 ### 1.3.6 Unit Tests
 

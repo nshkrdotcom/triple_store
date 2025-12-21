@@ -775,6 +775,113 @@ defmodule TripleStore.Dictionary do
     %Decimal{sign: sign, coef: mantissa, exp: exp}
   end
 
+  @doc """
+  Checks if a Decimal value can be inline-encoded.
+
+  A decimal can be inline-encoded if:
+  - The coefficient fits in 48 bits (max ~281 trillion)
+  - The exponent fits in 11 bits after biasing (range -1023 to 1024)
+
+  ## Examples
+
+      iex> TripleStore.Dictionary.inline_encodable_decimal?(Decimal.new("3.14"))
+      true
+
+      iex> TripleStore.Dictionary.inline_encodable_decimal?(Decimal.new("0"))
+      true
+  """
+  @spec inline_encodable_decimal?(Decimal.t()) :: boolean()
+  def inline_encodable_decimal?(%Decimal{coef: coef, exp: exp}) do
+    biased_exp = exp + @decimal_exponent_bias
+    coef <= @max_decimal_mantissa and biased_exp >= 0 and biased_exp <= @max_decimal_exponent
+  end
+
+  @doc """
+  Decodes any inline-encoded term ID to its original value.
+
+  This is a generic dispatcher that determines the term type and calls
+  the appropriate decoder function.
+
+  ## Arguments
+
+  - `id` - Term ID that should be inline-encoded (integer, decimal, or datetime)
+
+  ## Returns
+
+  - `{:ok, value}` - The decoded value (integer, Decimal, or DateTime)
+  - `{:error, :not_inline_encoded}` - If the ID is not an inline type
+
+  ## Examples
+
+      iex> {:ok, id} = TripleStore.Dictionary.encode_integer(42)
+      iex> TripleStore.Dictionary.decode_inline(id)
+      {:ok, 42}
+
+      iex> {:ok, id} = TripleStore.Dictionary.encode_decimal(Decimal.new("3.14"))
+      iex> {:ok, value} = TripleStore.Dictionary.decode_inline(id)
+      iex> Decimal.eq?(value, Decimal.new("3.14"))
+      true
+  """
+  @spec decode_inline(term_id()) :: {:ok, integer() | Decimal.t() | DateTime.t()} | {:error, :not_inline_encoded}
+  def decode_inline(id) when is_integer(id) and id >= 0 do
+    case term_type(id) do
+      :integer -> decode_integer(id)
+      :decimal -> decode_decimal(id)
+      :datetime -> decode_datetime(id)
+      _ -> {:error, :not_inline_encoded}
+    end
+  end
+
+  @doc """
+  Checks if an RDF term can be inline-encoded.
+
+  This predicate examines an RDF literal and determines if its value can be
+  encoded directly in the 60-bit payload of a term ID, avoiding dictionary
+  storage.
+
+  ## Supported Inline Types
+
+  - **xsd:integer**: Values in range [-2^59, 2^59)
+  - **xsd:decimal**: Values with coefficient ≤ 48 bits and reasonable exponent
+  - **xsd:dateTime**: Timestamps from 1970 onwards
+
+  ## Arguments
+
+  - `term` - An RDF term (only literals with numeric/datetime datatypes qualify)
+
+  ## Returns
+
+  - `true` if the term can be inline-encoded
+  - `false` otherwise (including URIs, blank nodes, and non-numeric literals)
+
+  ## Examples
+
+      iex> TripleStore.Dictionary.inline_encodable?(RDF.literal(42))
+      true
+
+      iex> TripleStore.Dictionary.inline_encodable?(RDF.literal("hello"))
+      false
+
+      iex> TripleStore.Dictionary.inline_encodable?(RDF.iri("http://example.org"))
+      false
+  """
+  @spec inline_encodable?(rdf_term()) :: boolean()
+  def inline_encodable?(%RDF.Literal{literal: %RDF.XSD.Integer{value: value}})
+      when is_integer(value) do
+    inline_encodable_integer?(value)
+  end
+
+  def inline_encodable?(%RDF.Literal{literal: %RDF.XSD.Decimal{value: %Decimal{} = value}}) do
+    inline_encodable_decimal?(value)
+  end
+
+  def inline_encodable?(%RDF.Literal{literal: %RDF.XSD.DateTime{value: %DateTime{} = value}}) do
+    inline_encodable_datetime?(value)
+  end
+
+  # URIs, blank nodes, and other literal types cannot be inline-encoded
+  def inline_encodable?(_term), do: false
+
   # ===========================================================================
   # Batch Operations (Suggestion S2)
   # ===========================================================================
