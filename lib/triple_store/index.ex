@@ -63,6 +63,26 @@ defmodule TripleStore.Index do
   @typedoc "A triple as a tuple of three term IDs"
   @type triple :: {term_id(), term_id(), term_id()}
 
+  @typedoc "A bound term in a pattern (has a specific ID)"
+  @type bound_element :: {:bound, term_id()}
+
+  @typedoc "A variable/unbound term in a pattern"
+  @type var_element :: :var
+
+  @typedoc "A pattern element - either bound to a specific ID or a variable"
+  @type pattern_element :: bound_element() | var_element()
+
+  @typedoc "A triple pattern for matching"
+  @type pattern :: {pattern_element(), pattern_element(), pattern_element()}
+
+  @typedoc "Index selection result with prefix and optional filter requirement"
+  @type index_selection :: %{
+          index: :spo | :pos | :osp,
+          prefix: binary(),
+          needs_filter: boolean(),
+          filter_position: nil | :predicate
+        }
+
   # ===========================================================================
   # SPO Index Key Encoding
   # ===========================================================================
@@ -635,4 +655,184 @@ defmodule TripleStore.Index do
 
     NIF.delete_batch(db, operations)
   end
+
+  # ===========================================================================
+  # Pattern Matching
+  # ===========================================================================
+
+  @doc """
+  Selects the optimal index and builds a prefix for the given triple pattern.
+
+  Given a triple pattern where each position is either bound to a specific ID
+  (`{:bound, id}`) or unbound (`:var`), this function selects the most efficient
+  index and constructs the appropriate prefix for iteration.
+
+  ## Pattern to Index Mapping
+
+  | Pattern | Index | Prefix | Notes |
+  |---------|-------|--------|-------|
+  | `{:bound, :bound, :bound}` | SPO | Full key | Exact lookup |
+  | `{:bound, :bound, :var}` | SPO | S-P | Subject-predicate prefix |
+  | `{:bound, :var, :var}` | SPO | S | Subject prefix |
+  | `{:var, :bound, :bound}` | POS | P-O | Predicate-object prefix |
+  | `{:var, :bound, :var}` | POS | P | Predicate prefix |
+  | `{:var, :var, :bound}` | OSP | O | Object prefix |
+  | `{:bound, :var, :bound}` | OSP | O-S | Object-subject prefix, filter by P |
+  | `{:var, :var, :var}` | SPO | Empty | Full scan |
+
+  ## Arguments
+
+  - `pattern` - A tuple of three pattern elements, each being `{:bound, id}` or `:var`
+
+  ## Returns
+
+  A map containing:
+  - `:index` - The column family to query (`:spo`, `:pos`, or `:osp`)
+  - `:prefix` - The binary prefix for iteration
+  - `:needs_filter` - Whether results need post-filtering
+  - `:filter_position` - Which position needs filtering (`:predicate` or `nil`)
+
+  ## Examples
+
+      iex> Index.select_index({{:bound, 1}, {:bound, 2}, {:bound, 3}})
+      %{index: :spo, prefix: <<...>>, needs_filter: false, filter_position: nil}
+
+      iex> Index.select_index({{:bound, 1}, :var, {:bound, 3}})
+      %{index: :osp, prefix: <<...>>, needs_filter: true, filter_position: :predicate}
+
+  """
+  @spec select_index(pattern()) :: index_selection()
+
+  # Pattern: SPO - all bound (exact lookup)
+  def select_index({{:bound, s}, {:bound, p}, {:bound, o}}) do
+    %{
+      index: :spo,
+      prefix: spo_key(s, p, o),
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  # Pattern: SP? - subject and predicate bound
+  def select_index({{:bound, s}, {:bound, p}, :var}) do
+    %{
+      index: :spo,
+      prefix: spo_prefix(s, p),
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  # Pattern: S?? - only subject bound
+  def select_index({{:bound, s}, :var, :var}) do
+    %{
+      index: :spo,
+      prefix: spo_prefix(s),
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  # Pattern: ?PO - predicate and object bound
+  def select_index({:var, {:bound, p}, {:bound, o}}) do
+    %{
+      index: :pos,
+      prefix: pos_prefix(p, o),
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  # Pattern: ?P? - only predicate bound
+  def select_index({:var, {:bound, p}, :var}) do
+    %{
+      index: :pos,
+      prefix: pos_prefix(p),
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  # Pattern: ??O - only object bound
+  def select_index({:var, :var, {:bound, o}}) do
+    %{
+      index: :osp,
+      prefix: osp_prefix(o),
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  # Pattern: S?O - subject and object bound (requires filtering)
+  # Uses OSP index with O-S prefix, then filters by predicate
+  def select_index({{:bound, s}, :var, {:bound, o}}) do
+    %{
+      index: :osp,
+      prefix: osp_prefix(o, s),
+      needs_filter: true,
+      filter_position: :predicate
+    }
+  end
+
+  # Pattern: ??? - nothing bound (full scan)
+  def select_index({:var, :var, :var}) do
+    %{
+      index: :spo,
+      prefix: <<>>,
+      needs_filter: false,
+      filter_position: nil
+    }
+  end
+
+  @doc """
+  Checks if a triple matches the bound values in a pattern.
+
+  This is used for post-filtering results when the pattern requires it
+  (specifically for the S?O pattern which uses OSP with O-S prefix).
+
+  ## Arguments
+
+  - `triple` - The triple `{s, p, o}` to check
+  - `pattern` - The pattern to match against
+
+  ## Returns
+
+  `true` if the triple matches all bound values in the pattern, `false` otherwise.
+
+  ## Examples
+
+      iex> Index.triple_matches_pattern?({1, 2, 3}, {{:bound, 1}, :var, {:bound, 3}})
+      true
+
+      iex> Index.triple_matches_pattern?({1, 2, 3}, {{:bound, 1}, {:bound, 5}, {:bound, 3}})
+      false
+
+  """
+  @spec triple_matches_pattern?(triple(), pattern()) :: boolean()
+  def triple_matches_pattern?({s, p, o}, {s_pat, p_pat, o_pat}) do
+    matches_element?(s, s_pat) and matches_element?(p, p_pat) and matches_element?(o, o_pat)
+  end
+
+  defp matches_element?(_value, :var), do: true
+  defp matches_element?(value, {:bound, expected}), do: value == expected
+
+  @doc """
+  Converts a triple pattern to a simplified form for index selection.
+
+  This helper converts patterns with IDs to a form showing just the binding status,
+  which can be useful for debugging and documentation.
+
+  ## Examples
+
+      iex> Index.pattern_shape({{:bound, 123}, :var, {:bound, 456}})
+      {:bound, :var, :bound}
+
+  """
+  @spec pattern_shape(pattern()) :: {atom(), atom(), atom()}
+  def pattern_shape({s_pat, p_pat, o_pat}) do
+    {element_shape(s_pat), element_shape(p_pat), element_shape(o_pat)}
+  end
+
+  defp element_shape(:var), do: :var
+  defp element_shape({:bound, _}), do: :bound
 end

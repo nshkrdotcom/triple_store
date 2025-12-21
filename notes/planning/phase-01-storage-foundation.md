@@ -277,18 +277,23 @@ Implement triple deletion removing entries from all three indices atomically.
 
 ### 1.4.4 Pattern Matching
 
-- [ ] **Task 1.4.4 Complete**
+- [x] **Task 1.4.4 Complete** (2025-12-21)
 
 Implement pattern-to-index mapping for all 8 possible triple patterns. Each pattern selects the optimal index and constructs the appropriate prefix.
 
-- [ ] 1.4.4.1 Implement `pattern_to_index({:bound, :bound, :bound})` -> `:spo`
-- [ ] 1.4.4.2 Implement `pattern_to_index({:bound, :bound, :var})` -> `:spo`
-- [ ] 1.4.4.3 Implement `pattern_to_index({:bound, :var, :var})` -> `:spo`
-- [ ] 1.4.4.4 Implement `pattern_to_index({:var, :bound, :bound})` -> `:pos`
-- [ ] 1.4.4.5 Implement `pattern_to_index({:var, :bound, :var})` -> `:pos`
-- [ ] 1.4.4.6 Implement `pattern_to_index({:var, :var, :bound})` -> `:osp`
-- [ ] 1.4.4.7 Implement `pattern_to_index({:bound, :var, :bound})` -> `:osp` with filter
-- [ ] 1.4.4.8 Implement `pattern_to_index({:var, :var, :var})` -> `:spo` full scan
+- [x] 1.4.4.1 Implement `pattern_to_index({:bound, :bound, :bound})` -> `:spo`
+- [x] 1.4.4.2 Implement `pattern_to_index({:bound, :bound, :var})` -> `:spo`
+- [x] 1.4.4.3 Implement `pattern_to_index({:bound, :var, :var})` -> `:spo`
+- [x] 1.4.4.4 Implement `pattern_to_index({:var, :bound, :bound})` -> `:pos`
+- [x] 1.4.4.5 Implement `pattern_to_index({:var, :bound, :var})` -> `:pos`
+- [x] 1.4.4.6 Implement `pattern_to_index({:var, :var, :bound})` -> `:osp`
+- [x] 1.4.4.7 Implement `pattern_to_index({:bound, :var, :bound})` -> `:osp` with filter
+- [x] 1.4.4.8 Implement `pattern_to_index({:var, :var, :var})` -> `:spo` full scan
+
+Additional functions implemented:
+- `select_index/1` - Returns index selection with prefix and filter info
+- `triple_matches_pattern?/2` - Post-filtering helper
+- `pattern_shape/1` - Debug helper for pattern visualization
 
 ### 1.4.5 Index Lookup
 
