@@ -835,4 +835,117 @@ defmodule TripleStore.Index do
 
   defp element_shape(:var), do: :var
   defp element_shape({:bound, _}), do: :bound
+
+  # ===========================================================================
+  # Index Lookup
+  # ===========================================================================
+
+  @doc """
+  Returns a stream of triples matching the given pattern.
+
+  Uses the optimal index based on which pattern positions are bound,
+  constructs the appropriate prefix, and iterates over matching entries.
+  For the S?O pattern, results are post-filtered by predicate.
+
+  ## Arguments
+
+  - `db` - RocksDB database reference
+  - `pattern` - A tuple of three pattern elements, each being `{:bound, id}` or `:var`
+
+  ## Returns
+
+  `{:ok, Stream.t()}` where each element is a triple `{s, p, o}`, or
+  `{:error, reason}` on failure.
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> Index.insert_triple(db, {1, 2, 3})
+      iex> {:ok, stream} = Index.lookup(db, {{:bound, 1}, :var, :var})
+      iex> Enum.to_list(stream)
+      [{1, 2, 3}]
+
+  """
+  @spec lookup(NIF.db_ref(), pattern()) :: {:ok, Enumerable.t()} | {:error, term()}
+  def lookup(db, pattern) do
+    %{index: index, prefix: prefix, needs_filter: needs_filter} = select_index(pattern)
+
+    case NIF.prefix_stream(db, index, prefix) do
+      {:ok, stream} ->
+        decoded_stream =
+          stream
+          |> Stream.map(fn {key, _value} -> key_to_triple(index, key) end)
+
+        final_stream =
+          if needs_filter do
+            Stream.filter(decoded_stream, &triple_matches_pattern?(&1, pattern))
+          else
+            decoded_stream
+          end
+
+        {:ok, final_stream}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Returns a list of all triples matching the given pattern.
+
+  This is a convenience function that collects all results from `lookup/2`
+  into a list. Use `lookup/2` directly for lazy evaluation on large result sets.
+
+  ## Arguments
+
+  - `db` - RocksDB database reference
+  - `pattern` - A tuple of three pattern elements, each being `{:bound, id}` or `:var`
+
+  ## Returns
+
+  `{:ok, [triple()]}` with all matching triples, or `{:error, reason}` on failure.
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> Index.insert_triples(db, [{1, 2, 3}, {1, 2, 4}, {1, 3, 5}])
+      iex> Index.lookup_all(db, {{:bound, 1}, {:bound, 2}, :var})
+      {:ok, [{1, 2, 3}, {1, 2, 4}]}
+
+  """
+  @spec lookup_all(NIF.db_ref(), pattern()) :: {:ok, [triple()]} | {:error, term()}
+  def lookup_all(db, pattern) do
+    case lookup(db, pattern) do
+      {:ok, stream} -> {:ok, Enum.to_list(stream)}
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc """
+  Counts the number of triples matching the given pattern.
+
+  ## Arguments
+
+  - `db` - RocksDB database reference
+  - `pattern` - A tuple of three pattern elements, each being `{:bound, id}` or `:var`
+
+  ## Returns
+
+  `{:ok, count}` with the number of matching triples, or `{:error, reason}` on failure.
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> Index.insert_triples(db, [{1, 2, 3}, {1, 2, 4}, {1, 3, 5}])
+      iex> Index.count(db, {{:bound, 1}, :var, :var})
+      {:ok, 3}
+
+  """
+  @spec count(NIF.db_ref(), pattern()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def count(db, pattern) do
+    case lookup(db, pattern) do
+      {:ok, stream} -> {:ok, Enum.count(stream)}
+      {:error, _} = error -> error
+    end
+  end
 end

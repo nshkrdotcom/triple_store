@@ -297,15 +297,19 @@ Additional functions implemented:
 
 ### 1.4.5 Index Lookup
 
-- [ ] **Task 1.4.5 Complete**
+- [x] **Task 1.4.5 Complete** (2025-12-21)
 
 Implement the lookup function that returns a stream of matching triples for a given pattern.
 
-- [ ] 1.4.5.1 Implement `lookup(db, pattern)` returning `Stream.t()`
-- [ ] 1.4.5.2 Implement `build_prefix(pattern, index)` constructing prefix bytes
-- [ ] 1.4.5.3 Implement result decoding from index keys back to `{s, p, o}` tuples
-- [ ] 1.4.5.4 Implement post-filtering for `{:bound, :var, :bound}` pattern
-- [ ] 1.4.5.5 Implement `triple_exists?(db, {s, p, o})` for existence check
+- [x] 1.4.5.1 Implement `lookup(db, pattern)` returning `Stream.t()`
+- [x] 1.4.5.2 Implement `build_prefix(pattern, index)` constructing prefix bytes (done via select_index/1)
+- [x] 1.4.5.3 Implement result decoding from index keys back to `{s, p, o}` tuples
+- [x] 1.4.5.4 Implement post-filtering for `{:bound, :var, :bound}` pattern
+- [x] 1.4.5.5 Implement `triple_exists?(db, {s, p, o})` for existence check (done in 1.4.2)
+
+Additional functions implemented:
+- `lookup_all/2` - Collects all matching triples into a list
+- `count/2` - Returns count of matching triples
 
 ### 1.4.6 Unit Tests
 
