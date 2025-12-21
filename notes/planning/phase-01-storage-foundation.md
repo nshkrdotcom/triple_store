@@ -62,7 +62,7 @@ Set up development tooling including code formatting, testing infrastructure, an
 
 ## 1.2 RocksDB NIF Wrapper
 
-- [ ] **Section 1.2 Complete**
+- [x] **Section 1.2 Complete**
 
 This section implements the Rust NIF wrapper around RocksDB, providing the low-level storage operations. The wrapper uses column families to separate different data stores (dictionary, indices) and implements WriteBatch for atomic multi-index writes.
 
@@ -127,16 +127,16 @@ Implement RocksDB snapshots for consistent reads during updates. This provides t
 
 ### 1.2.6 Unit Tests
 
-- [ ] **Task 1.2.6 Complete**
+- [x] **Task 1.2.6 Complete**
 
-- [ ] Test database opens and closes without leaks
-- [ ] Test column families are created correctly
-- [ ] Test single get/put/delete operations
-- [ ] Test WriteBatch atomic commits
-- [ ] Test prefix iterator returns correct results
-- [ ] Test iterator seek positions correctly
-- [ ] Test snapshot provides consistent view
-- [ ] Test error handling for invalid paths/operations
+- [x] Test database opens and closes without leaks
+- [x] Test column families are created correctly
+- [x] Test single get/put/delete operations
+- [x] Test WriteBatch atomic commits
+- [x] Test prefix iterator returns correct results
+- [x] Test iterator seek positions correctly
+- [x] Test snapshot provides consistent view
+- [x] Test error handling for invalid paths/operations
 
 ---
 
