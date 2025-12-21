@@ -226,7 +226,7 @@ Implement inline encoding for numeric types that fit within 60 bits. These value
 
 ## 1.4 Triple Index Layer
 
-- [ ] **Section 1.4 Complete**
+- [x] **Section 1.4 Complete** (2025-12-21)
 
 This section implements the three triple indices (SPO, POS, OSP) that provide efficient access patterns for all possible triple queries. Each index stores the same triple data in different orderings, using big-endian keys for natural lexicographic ordering.
 
@@ -313,24 +313,26 @@ Additional functions implemented:
 
 ### 1.4.6 Unit Tests
 
-- [ ] **Task 1.4.6 Complete**
+- [x] **Task 1.4.6 Complete** (2025-12-21)
 
-- [ ] Test SPO key encoding/decoding roundtrip
-- [ ] Test POS key encoding/decoding roundtrip
-- [ ] Test OSP key encoding/decoding roundtrip
-- [ ] Test single triple insert writes to all indices
-- [ ] Test batch triple insert atomicity
-- [ ] Test duplicate insert is idempotent
-- [ ] Test single triple delete removes from all indices
-- [ ] Test non-existent triple delete is no-op
-- [ ] Test pattern `{:bound, :bound, :bound}` exact lookup
-- [ ] Test pattern `{:bound, :bound, :var}` subject-predicate lookup
-- [ ] Test pattern `{:bound, :var, :var}` subject lookup
-- [ ] Test pattern `{:var, :bound, :bound}` predicate-object lookup
-- [ ] Test pattern `{:var, :bound, :var}` predicate lookup
-- [ ] Test pattern `{:var, :var, :bound}` object lookup
-- [ ] Test pattern `{:bound, :var, :bound}` subject-object with filter
-- [ ] Test pattern `{:var, :var, :var}` full scan
+All tests implemented across individual task test files:
+
+- [x] Test SPO key encoding/decoding roundtrip (key_encoding_test.exs)
+- [x] Test POS key encoding/decoding roundtrip (key_encoding_test.exs)
+- [x] Test OSP key encoding/decoding roundtrip (key_encoding_test.exs)
+- [x] Test single triple insert writes to all indices (triple_insert_test.exs)
+- [x] Test batch triple insert atomicity (triple_insert_test.exs)
+- [x] Test duplicate insert is idempotent (triple_insert_test.exs)
+- [x] Test single triple delete removes from all indices (triple_delete_test.exs)
+- [x] Test non-existent triple delete is no-op (triple_delete_test.exs)
+- [x] Test pattern `{:bound, :bound, :bound}` exact lookup (index_lookup_test.exs)
+- [x] Test pattern `{:bound, :bound, :var}` subject-predicate lookup (index_lookup_test.exs)
+- [x] Test pattern `{:bound, :var, :var}` subject lookup (index_lookup_test.exs)
+- [x] Test pattern `{:var, :bound, :bound}` predicate-object lookup (index_lookup_test.exs)
+- [x] Test pattern `{:var, :bound, :var}` predicate lookup (index_lookup_test.exs)
+- [x] Test pattern `{:var, :var, :bound}` object lookup (index_lookup_test.exs)
+- [x] Test pattern `{:bound, :var, :bound}` subject-object with filter (index_lookup_test.exs)
+- [x] Test pattern `{:var, :var, :var}` full scan (index_lookup_test.exs)
 
 ---
 
