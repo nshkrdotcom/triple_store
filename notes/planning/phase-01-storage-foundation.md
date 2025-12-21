@@ -116,14 +116,14 @@ Implement prefix iterators for range queries over indices. The iterator returns 
 
 ### 1.2.5 Snapshot Support
 
-- [ ] **Task 1.2.5 Complete**
+- [x] **Task 1.2.5 Complete**
 
 Implement RocksDB snapshots for consistent reads during updates. This provides the foundation for transaction isolation in Phase 3.
 
-- [ ] 1.2.5.1 Implement `snapshot(db)` returning snapshot resource
-- [ ] 1.2.5.2 Implement `get_snapshot(snapshot, cf, key)` for point-in-time reads
-- [ ] 1.2.5.3 Implement `prefix_iterator_snapshot(snapshot, cf, prefix)`
-- [ ] 1.2.5.4 Implement `release_snapshot(snapshot)` for cleanup
+- [x] 1.2.5.1 Implement `snapshot(db)` returning snapshot resource
+- [x] 1.2.5.2 Implement `get_snapshot(snapshot, cf, key)` for point-in-time reads
+- [x] 1.2.5.3 Implement `prefix_iterator_snapshot(snapshot, cf, prefix)`
+- [x] 1.2.5.4 Implement `release_snapshot(snapshot)` for cleanup
 
 ### 1.2.6 Unit Tests
 

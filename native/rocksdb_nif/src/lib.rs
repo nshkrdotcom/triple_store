@@ -4,7 +4,7 @@
 //! Elixir application. All I/O operations use dirty CPU schedulers to prevent
 //! blocking the BEAM schedulers.
 
-use rocksdb::{ColumnFamilyDescriptor, DBIteratorWithThreadMode, IteratorMode, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamilyDescriptor, DBIteratorWithThreadMode, IteratorMode, Options, ReadOptions, SnapshotWithThreadMode, WriteBatch, DB};
 use rustler::{Binary, Encoder, Env, ListIterator, NewBinary, NifResult, Resource, ResourceArc, Term};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -39,6 +39,34 @@ pub struct IteratorRef {
 
 #[rustler::resource_impl]
 impl Resource for IteratorRef {}
+
+/// Snapshot reference wrapper for point-in-time consistent reads.
+/// Stores the snapshot along with a reference to the database to keep it alive.
+pub struct SnapshotRef {
+    /// The RocksDB snapshot. Uses 'static lifetime with raw pointer internally.
+    /// Safety: The DbRef Arc keeps the database alive for the snapshot's lifetime.
+    snapshot: Mutex<Option<SnapshotWithThreadMode<'static, DB>>>,
+    /// Reference to the database to keep it alive
+    db_ref: Arc<ResourceArc<DbRef>>,
+}
+
+#[rustler::resource_impl]
+impl Resource for SnapshotRef {}
+
+/// Snapshot iterator reference for iterating over a snapshot.
+pub struct SnapshotIteratorRef {
+    /// The RocksDB iterator over snapshot.
+    iterator: Mutex<Option<DBIteratorWithThreadMode<'static, DB>>>,
+    /// Reference to snapshot to keep it alive
+    _snapshot_ref: Arc<ResourceArc<SnapshotRef>>,
+    /// The prefix used for this iterator (for bounds checking)
+    prefix: Vec<u8>,
+    /// Column family name for this iterator
+    cf_name: String,
+}
+
+#[rustler::resource_impl]
+impl Resource for SnapshotIteratorRef {}
 
 impl DbRef {
     fn new(db: DB, path: String) -> Self {
@@ -79,6 +107,8 @@ mod atoms {
         iterator_end,
         iterator_failed,
         iterator_closed,
+        // Snapshot atoms
+        snapshot_released,
     }
 }
 
@@ -935,6 +965,354 @@ fn iterator_collect<'a>(env: Env<'a>, iter_ref: ResourceArc<IteratorRef>) -> Nif
     }
 
     Ok((atoms::ok(), results).encode(env))
+}
+
+// ============================================================================
+// Snapshot Operations
+// ============================================================================
+
+/// Creates a snapshot of the database for consistent point-in-time reads.
+///
+/// A snapshot provides a consistent view of the database at the time of creation.
+/// All reads using the snapshot will see the same data, regardless of subsequent
+/// writes to the database.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+///
+/// # Returns
+/// * `{:ok, snapshot_ref}` on success
+/// * `{:error, :already_closed}` if database is closed
+#[rustler::nif(schedule = "DirtyCpu")]
+fn snapshot<'a>(env: Env<'a>, db_ref: ResourceArc<DbRef>) -> NifResult<Term<'a>> {
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let snap = db.snapshot();
+
+    // SAFETY: We keep the DbRef alive via Arc, so the snapshot remains valid
+    let static_snapshot: SnapshotWithThreadMode<'static, DB> = unsafe {
+        std::mem::transmute(snap)
+    };
+
+    let snap_ref = ResourceArc::new(SnapshotRef {
+        snapshot: Mutex::new(Some(static_snapshot)),
+        db_ref: Arc::new(db_ref.clone()),
+    });
+
+    Ok((atoms::ok(), snap_ref).encode(env))
+}
+
+/// Gets a value from a column family using a snapshot.
+///
+/// This provides point-in-time consistent reads - the value returned
+/// is what existed at the time the snapshot was created.
+///
+/// # Arguments
+/// * `snapshot_ref` - The snapshot reference
+/// * `cf` - The column family atom
+/// * `key` - The key as a binary
+///
+/// # Returns
+/// * `{:ok, value}` if found
+/// * `:not_found` if key doesn't exist
+/// * `{:error, :snapshot_released}` if snapshot was released
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:get_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn snapshot_get<'a>(
+    env: Env<'a>,
+    snapshot_ref: ResourceArc<SnapshotRef>,
+    cf: rustler::Atom,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let cf_name = match cf_atom_to_name(cf) {
+        Some(name) => name,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let snap_guard = snapshot_ref
+        .snapshot
+        .lock()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let snapshot = match snap_guard.as_ref() {
+        Some(snap) => snap,
+        None => return Ok((atoms::error(), atoms::snapshot_released()).encode(env)),
+    };
+
+    // Get the database to access column family handles
+    let db_guard = snapshot_ref.db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let cf_handle = match db.cf_handle(cf_name) {
+        Some(cf) => cf,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    // Use ReadOptions with snapshot
+    let mut read_opts = ReadOptions::default();
+    read_opts.set_snapshot(snapshot);
+
+    match db.get_cf_opt(&cf_handle, key.as_slice(), &read_opts) {
+        Ok(Some(value)) => {
+            let mut binary = NewBinary::new(env, value.len());
+            binary.as_mut_slice().copy_from_slice(&value);
+            Ok((atoms::ok(), Binary::from(binary)).encode(env))
+        }
+        Ok(None) => Ok(atoms::not_found().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::get_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Creates a prefix iterator over a snapshot.
+///
+/// The iterator returns all key-value pairs where the key starts with the given prefix,
+/// using the consistent view from the snapshot.
+///
+/// # Arguments
+/// * `snapshot_ref` - The snapshot reference
+/// * `cf` - The column family atom
+/// * `prefix` - The prefix to iterate over
+///
+/// # Returns
+/// * `{:ok, iterator_ref}` on success
+/// * `{:error, :snapshot_released}` if snapshot was released
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+#[rustler::nif(schedule = "DirtyCpu")]
+fn snapshot_prefix_iterator<'a>(
+    env: Env<'a>,
+    snapshot_ref: ResourceArc<SnapshotRef>,
+    cf: rustler::Atom,
+    prefix: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let cf_name = match cf_atom_to_name(cf) {
+        Some(name) => name,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let snap_guard = snapshot_ref
+        .snapshot
+        .lock()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let snapshot = match snap_guard.as_ref() {
+        Some(snap) => snap,
+        None => return Ok((atoms::error(), atoms::snapshot_released()).encode(env)),
+    };
+
+    // Get the database to access column family handles
+    let db_guard = snapshot_ref.db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let cf_handle = match db.cf_handle(cf_name) {
+        Some(cf) => cf,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let prefix_bytes = prefix.as_slice().to_vec();
+
+    // Create read options with snapshot
+    let mut read_opts = ReadOptions::default();
+    read_opts.set_snapshot(snapshot);
+
+    // Create the iterator with snapshot
+    let iterator = db.iterator_cf_opt(
+        &cf_handle,
+        read_opts,
+        IteratorMode::From(&prefix_bytes, rocksdb::Direction::Forward),
+    );
+
+    // SAFETY: We keep the SnapshotRef alive via Arc, so the iterator remains valid
+    let static_iterator: DBIteratorWithThreadMode<'static, DB> = unsafe {
+        std::mem::transmute(iterator)
+    };
+
+    let iter_ref = ResourceArc::new(SnapshotIteratorRef {
+        iterator: Mutex::new(Some(static_iterator)),
+        _snapshot_ref: Arc::new(snapshot_ref.clone()),
+        prefix: prefix_bytes,
+        cf_name: cf_name.to_string(),
+    });
+
+    Ok((atoms::ok(), iter_ref).encode(env))
+}
+
+/// Gets the next key-value pair from a snapshot iterator.
+///
+/// # Arguments
+/// * `iter_ref` - The snapshot iterator reference
+///
+/// # Returns
+/// * `{:ok, key, value}` if there's a next item with matching prefix
+/// * `:iterator_end` if the iterator is exhausted or prefix no longer matches
+/// * `{:error, :iterator_closed}` if iterator was closed
+/// * `{:error, {:iterator_failed, reason}}` on error
+#[rustler::nif(schedule = "DirtyCpu")]
+fn snapshot_iterator_next<'a>(
+    env: Env<'a>,
+    iter_ref: ResourceArc<SnapshotIteratorRef>,
+) -> NifResult<Term<'a>> {
+    let mut iter_guard = iter_ref
+        .iterator
+        .lock()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let iterator = match iter_guard.as_mut() {
+        Some(iter) => iter,
+        None => return Ok((atoms::error(), atoms::iterator_closed()).encode(env)),
+    };
+
+    match iterator.next() {
+        Some(Ok((key, value))) => {
+            // Check if key still has the prefix
+            if !key.starts_with(&iter_ref.prefix) {
+                return Ok(atoms::iterator_end().encode(env));
+            }
+
+            let mut key_binary = NewBinary::new(env, key.len());
+            key_binary.as_mut_slice().copy_from_slice(&key);
+
+            let mut value_binary = NewBinary::new(env, value.len());
+            value_binary.as_mut_slice().copy_from_slice(&value);
+
+            Ok((atoms::ok(), Binary::from(key_binary), Binary::from(value_binary)).encode(env))
+        }
+        Some(Err(e)) => {
+            Ok((atoms::error(), (atoms::iterator_failed(), e.to_string())).encode(env))
+        }
+        None => Ok(atoms::iterator_end().encode(env)),
+    }
+}
+
+/// Closes a snapshot iterator and releases resources.
+///
+/// # Arguments
+/// * `iter_ref` - The snapshot iterator reference
+///
+/// # Returns
+/// * `:ok` on success
+/// * `{:error, :iterator_closed}` if already closed
+#[rustler::nif]
+fn snapshot_iterator_close<'a>(
+    env: Env<'a>,
+    iter_ref: ResourceArc<SnapshotIteratorRef>,
+) -> NifResult<Term<'a>> {
+    let mut iter_guard = iter_ref
+        .iterator
+        .lock()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    if iter_guard.is_none() {
+        return Ok((atoms::error(), atoms::iterator_closed()).encode(env));
+    }
+
+    // Drop the iterator
+    *iter_guard = None;
+
+    Ok(atoms::ok().encode(env))
+}
+
+/// Collects all remaining key-value pairs from a snapshot iterator into a list.
+///
+/// # Arguments
+/// * `iter_ref` - The snapshot iterator reference
+///
+/// # Returns
+/// * `{:ok, [{key, value}, ...]}` with all remaining entries
+/// * `{:error, :iterator_closed}` if iterator was closed
+/// * `{:error, {:iterator_failed, reason}}` on error
+#[rustler::nif(schedule = "DirtyCpu")]
+fn snapshot_iterator_collect<'a>(
+    env: Env<'a>,
+    iter_ref: ResourceArc<SnapshotIteratorRef>,
+) -> NifResult<Term<'a>> {
+    let mut iter_guard = iter_ref
+        .iterator
+        .lock()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let iterator = match iter_guard.as_mut() {
+        Some(iter) => iter,
+        None => return Ok((atoms::error(), atoms::iterator_closed()).encode(env)),
+    };
+
+    let mut results: Vec<Term<'a>> = Vec::new();
+
+    for result in iterator.by_ref() {
+        match result {
+            Ok((key, value)) => {
+                // Check if key still has the prefix
+                if !key.starts_with(&iter_ref.prefix) {
+                    break;
+                }
+
+                let mut key_binary = NewBinary::new(env, key.len());
+                key_binary.as_mut_slice().copy_from_slice(&key);
+
+                let mut value_binary = NewBinary::new(env, value.len());
+                value_binary.as_mut_slice().copy_from_slice(&value);
+
+                results.push((Binary::from(key_binary), Binary::from(value_binary)).encode(env));
+            }
+            Err(e) => {
+                return Ok((atoms::error(), (atoms::iterator_failed(), e.to_string())).encode(env));
+            }
+        }
+    }
+
+    Ok((atoms::ok(), results).encode(env))
+}
+
+/// Releases a snapshot and frees resources.
+///
+/// After calling release, the snapshot handle is no longer valid.
+///
+/// # Arguments
+/// * `snapshot_ref` - The snapshot reference
+///
+/// # Returns
+/// * `:ok` on success
+/// * `{:error, :snapshot_released}` if already released
+#[rustler::nif]
+fn release_snapshot<'a>(
+    env: Env<'a>,
+    snapshot_ref: ResourceArc<SnapshotRef>,
+) -> NifResult<Term<'a>> {
+    let mut snap_guard = snapshot_ref
+        .snapshot
+        .lock()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    if snap_guard.is_none() {
+        return Ok((atoms::error(), atoms::snapshot_released()).encode(env));
+    }
+
+    // Drop the snapshot
+    *snap_guard = None;
+
+    Ok(atoms::ok().encode(env))
 }
 
 rustler::init!("Elixir.TripleStore.Backend.RocksDB.NIF");

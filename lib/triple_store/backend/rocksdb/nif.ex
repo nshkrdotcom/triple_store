@@ -560,4 +560,229 @@ defmodule TripleStore.Backend.RocksDB.NIF do
       {:error, _} -> {:halt, iter}
     end
   end
+
+  # ============================================================================
+  # Snapshot Operations
+  # ============================================================================
+
+  @type snapshot_ref :: reference()
+  @type snapshot_iterator_ref :: reference()
+
+  @doc """
+  Creates a snapshot of the database for consistent point-in-time reads.
+
+  A snapshot provides a consistent view of the database at the time of creation.
+  All reads using the snapshot will see the same data, regardless of subsequent
+  writes to the database. This is essential for transaction isolation.
+
+  The snapshot must be released with `release_snapshot/1` when done, or it will
+  be automatically released when garbage collected.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+
+  ## Returns
+  - `{:ok, snapshot_ref}` on success
+  - `{:error, :already_closed}` if database is closed
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> NIF.put(db, :spo, "key1", "value1")
+      iex> {:ok, snap} = NIF.snapshot(db)
+      iex> NIF.put(db, :spo, "key1", "value2")  # Update after snapshot
+      iex> NIF.snapshot_get(snap, :spo, "key1")
+      {:ok, "value1"}  # Still sees old value
+
+  """
+  @spec snapshot(db_ref()) :: {:ok, snapshot_ref()} | {:error, term()}
+  def snapshot(_db_ref), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Gets a value from a column family using a snapshot.
+
+  This provides point-in-time consistent reads - the value returned
+  is what existed at the time the snapshot was created.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `snapshot_ref` - The snapshot reference
+  - `cf` - The column family atom
+  - `key` - The key as a binary
+
+  ## Returns
+  - `{:ok, value}` if found
+  - `:not_found` if key doesn't exist at snapshot time
+  - `{:error, :snapshot_released}` if snapshot was released
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:get_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, snap} = NIF.snapshot(db)
+      iex> NIF.snapshot_get(snap, :spo, "key1")
+      {:ok, "value1"}
+
+  """
+  @spec snapshot_get(snapshot_ref(), column_family(), binary()) ::
+          {:ok, binary()} | :not_found | {:error, term()}
+  def snapshot_get(_snapshot_ref, _cf, _key), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Creates a prefix iterator over a snapshot.
+
+  The iterator returns all key-value pairs where the key starts with the given prefix,
+  using the consistent view from the snapshot.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `snapshot_ref` - The snapshot reference
+  - `cf` - The column family atom
+  - `prefix` - The prefix to iterate over (can be empty for full scan)
+
+  ## Returns
+  - `{:ok, iterator_ref}` on success
+  - `{:error, :snapshot_released}` if snapshot was released
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+
+  ## Examples
+
+      iex> {:ok, snap} = NIF.snapshot(db)
+      iex> {:ok, iter} = NIF.snapshot_prefix_iterator(snap, :spo, "s1")
+      iex> {:ok, key, value} = NIF.snapshot_iterator_next(iter)
+
+  """
+  @spec snapshot_prefix_iterator(snapshot_ref(), column_family(), binary()) ::
+          {:ok, snapshot_iterator_ref()} | {:error, term()}
+  def snapshot_prefix_iterator(_snapshot_ref, _cf, _prefix),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Gets the next key-value pair from a snapshot iterator.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `iter_ref` - The snapshot iterator reference
+
+  ## Returns
+  - `{:ok, key, value}` if there's a next item with matching prefix
+  - `:iterator_end` if the iterator is exhausted or prefix no longer matches
+  - `{:error, :iterator_closed}` if iterator was closed
+  - `{:error, {:iterator_failed, reason}}` on error
+
+  """
+  @spec snapshot_iterator_next(snapshot_iterator_ref()) ::
+          {:ok, binary(), binary()} | :iterator_end | {:error, term()}
+  def snapshot_iterator_next(_iter_ref), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Closes a snapshot iterator and releases resources.
+
+  ## Arguments
+  - `iter_ref` - The snapshot iterator reference
+
+  ## Returns
+  - `:ok` on success
+  - `{:error, :iterator_closed}` if already closed
+
+  """
+  @spec snapshot_iterator_close(snapshot_iterator_ref()) :: :ok | {:error, :iterator_closed}
+  def snapshot_iterator_close(_iter_ref), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Collects all remaining key-value pairs from a snapshot iterator into a list.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `iter_ref` - The snapshot iterator reference
+
+  ## Returns
+  - `{:ok, [{key, value}, ...]}` with all remaining entries
+  - `{:error, :iterator_closed}` if iterator was closed
+  - `{:error, {:iterator_failed, reason}}` on error
+
+  """
+  @spec snapshot_iterator_collect(snapshot_iterator_ref()) ::
+          {:ok, [{binary(), binary()}]} | {:error, term()}
+  def snapshot_iterator_collect(_iter_ref), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Releases a snapshot and frees resources.
+
+  After calling release, the snapshot handle is no longer valid.
+
+  ## Arguments
+  - `snapshot_ref` - The snapshot reference
+
+  ## Returns
+  - `:ok` on success
+  - `{:error, :snapshot_released}` if already released
+
+  ## Examples
+
+      iex> {:ok, snap} = NIF.snapshot(db)
+      iex> NIF.release_snapshot(snap)
+      :ok
+      iex> NIF.release_snapshot(snap)
+      {:error, :snapshot_released}
+
+  """
+  @spec release_snapshot(snapshot_ref()) :: :ok | {:error, :snapshot_released}
+  def release_snapshot(_snapshot_ref), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Creates an Elixir Stream from a snapshot prefix iterator.
+
+  This wraps the snapshot iterator in a lazy Stream that automatically handles
+  iteration and cleanup. The iterator is closed when the stream is fully consumed.
+
+  ## Arguments
+  - `snapshot_ref` - The snapshot reference
+  - `cf` - The column family atom
+  - `prefix` - The prefix to iterate over (can be empty for full scan)
+
+  ## Returns
+  - `{:ok, Stream.t()}` on success
+  - `{:error, term()}` on failure
+
+  ## Examples
+
+      iex> {:ok, snap} = NIF.snapshot(db)
+      iex> {:ok, stream} = NIF.snapshot_stream(snap, :spo, "s1")
+      iex> Enum.to_list(stream)
+      [{"s1p1o1", ""}, {"s1p1o2", ""}]
+
+  """
+  @spec snapshot_stream(snapshot_ref(), column_family(), binary()) ::
+          {:ok, Enumerable.t()} | {:error, term()}
+  def snapshot_stream(snapshot_ref, cf, prefix) do
+    case snapshot_prefix_iterator(snapshot_ref, cf, prefix) do
+      {:ok, iter} ->
+        stream =
+          Stream.resource(
+            fn -> iter end,
+            &snapshot_stream_next/1,
+            fn iter -> snapshot_iterator_close(iter) end
+          )
+
+        {:ok, stream}
+
+      error ->
+        error
+    end
+  end
+
+  defp snapshot_stream_next(iter) do
+    case snapshot_iterator_next(iter) do
+      {:ok, key, value} -> {[{key, value}], iter}
+      :iterator_end -> {:halt, iter}
+      {:error, _} -> {:halt, iter}
+    end
+  end
 end
