@@ -82,14 +82,14 @@ Implement database open/close operations with column family configuration. The d
 
 ### 1.2.2 Basic Read/Write Operations
 
-- [ ] **Task 1.2.2 Complete**
+- [x] **Task 1.2.2 Complete**
 
 Implement single key-value operations for each column family. These form the foundation for dictionary lookups and index queries.
 
-- [ ] 1.2.2.1 Implement `get(db, cf, key)` returning `{:ok, value}` or `:not_found`
-- [ ] 1.2.2.2 Implement `put(db, cf, key, value)` for single writes
-- [ ] 1.2.2.3 Implement `delete(db, cf, key)` for single deletes
-- [ ] 1.2.2.4 Implement `exists?(db, cf, key)` for existence checks
+- [x] 1.2.2.1 Implement `get(db, cf, key)` returning `{:ok, value}` or `:not_found`
+- [x] 1.2.2.2 Implement `put(db, cf, key, value)` for single writes
+- [x] 1.2.2.3 Implement `delete(db, cf, key)` for single deletes
+- [x] 1.2.2.4 Implement `exists?(db, cf, key)` for existence checks
 
 ### 1.2.3 WriteBatch API
 

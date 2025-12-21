@@ -129,4 +129,129 @@ defmodule TripleStore.Backend.RocksDB.NIF do
   @spec is_open(db_ref()) :: boolean()
   # credo:disable-for-next-line Credo.Check.Readability.PredicateFunctionNames
   def is_open(_db_ref), do: :erlang.nif_error(:nif_not_loaded)
+
+  # ============================================================================
+  # Key-Value Operations
+  # ============================================================================
+
+  @doc """
+  Gets a value from a column family.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `cf` - The column family atom
+  - `key` - The key as a binary
+
+  ## Returns
+  - `{:ok, value}` if found
+  - `:not_found` if key doesn't exist
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:get_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> NIF.put(db, :id2str, "key1", "value1")
+      :ok
+      iex> NIF.get(db, :id2str, "key1")
+      {:ok, "value1"}
+      iex> NIF.get(db, :id2str, "nonexistent")
+      :not_found
+
+  """
+  @spec get(db_ref(), column_family(), binary()) ::
+          {:ok, binary()} | :not_found | {:error, term()}
+  def get(_db_ref, _cf, _key), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Puts a key-value pair into a column family.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `cf` - The column family atom
+  - `key` - The key as a binary
+  - `value` - The value as a binary
+
+  ## Returns
+  - `:ok` on success
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:put_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> NIF.put(db, :id2str, "key1", "value1")
+      :ok
+
+  """
+  @spec put(db_ref(), column_family(), binary(), binary()) :: :ok | {:error, term()}
+  def put(_db_ref, _cf, _key, _value), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Deletes a key from a column family.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `cf` - The column family atom
+  - `key` - The key to delete
+
+  ## Returns
+  - `:ok` on success (even if key didn't exist)
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:delete_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> NIF.put(db, :id2str, "key1", "value1")
+      :ok
+      iex> NIF.delete(db, :id2str, "key1")
+      :ok
+      iex> NIF.get(db, :id2str, "key1")
+      :not_found
+
+  """
+  @spec delete(db_ref(), column_family(), binary()) :: :ok | {:error, term()}
+  def delete(_db_ref, _cf, _key), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  Checks if a key exists in a column family.
+
+  Uses dirty CPU scheduler to prevent blocking BEAM schedulers.
+  More efficient than `get/3` when you only need to check existence.
+
+  ## Arguments
+  - `db_ref` - The database reference
+  - `cf` - The column family atom
+  - `key` - The key to check
+
+  ## Returns
+  - `{:ok, true}` if key exists
+  - `{:ok, false}` if key doesn't exist
+  - `{:error, :already_closed}` if database is closed
+  - `{:error, {:invalid_cf, cf}}` if column family is invalid
+  - `{:error, {:get_failed, reason}}` on other errors
+
+  ## Examples
+
+      iex> {:ok, db} = NIF.open("/tmp/test_db")
+      iex> NIF.put(db, :id2str, "key1", "value1")
+      :ok
+      iex> NIF.exists(db, :id2str, "key1")
+      {:ok, true}
+      iex> NIF.exists(db, :id2str, "nonexistent")
+      {:ok, false}
+
+  """
+  @spec exists(db_ref(), column_family(), binary()) :: {:ok, boolean()} | {:error, term()}
+  def exists(_db_ref, _cf, _key), do: :erlang.nif_error(:nif_not_loaded)
 end

@@ -5,7 +5,7 @@
 //! blocking the BEAM schedulers.
 
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
-use rustler::{Encoder, Env, NifResult, Resource, ResourceArc, Term};
+use rustler::{Binary, Encoder, Env, NewBinary, NifResult, Resource, ResourceArc, Term};
 use std::sync::RwLock;
 
 /// Column family names used by TripleStore
@@ -48,6 +48,29 @@ mod atoms {
         open_failed,
         close_failed,
         invalid_cf,
+        get_failed,
+        put_failed,
+        delete_failed,
+    }
+}
+
+/// Converts a column family atom to its string name.
+/// Returns None if the atom is not a valid column family.
+fn cf_atom_to_name(cf_atom: rustler::Atom) -> Option<&'static str> {
+    if cf_atom == atoms::id2str() {
+        Some("id2str")
+    } else if cf_atom == atoms::str2id() {
+        Some("str2id")
+    } else if cf_atom == atoms::spo() {
+        Some("spo")
+    } else if cf_atom == atoms::pos() {
+        Some("pos")
+    } else if cf_atom == atoms::osp() {
+        Some("osp")
+    } else if cf_atom == atoms::derived() {
+        Some("derived")
+    } else {
+        None
     }
 }
 
@@ -163,6 +186,197 @@ fn is_open(db_ref: ResourceArc<DbRef>) -> NifResult<bool> {
         .read()
         .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
     Ok(db_guard.is_some())
+}
+
+/// Gets a value from a column family.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `cf` - The column family atom (:id2str, :str2id, :spo, :pos, :osp, :derived)
+/// * `key` - The key as a binary
+///
+/// # Returns
+/// * `{:ok, value}` if found
+/// * `:not_found` if key doesn't exist
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:get_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn get<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    cf: rustler::Atom,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let cf_name = match cf_atom_to_name(cf) {
+        Some(name) => name,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let cf_handle = match db.cf_handle(cf_name) {
+        Some(cf) => cf,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    match db.get_cf(&cf_handle, key.as_slice()) {
+        Ok(Some(value)) => {
+            let mut binary = NewBinary::new(env, value.len());
+            binary.as_mut_slice().copy_from_slice(&value);
+            Ok((atoms::ok(), Binary::from(binary)).encode(env))
+        }
+        Ok(None) => Ok(atoms::not_found().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::get_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Puts a key-value pair into a column family.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `cf` - The column family atom
+/// * `key` - The key as a binary
+/// * `value` - The value as a binary
+///
+/// # Returns
+/// * `:ok` on success
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:put_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn put<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    cf: rustler::Atom,
+    key: Binary<'a>,
+    value: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let cf_name = match cf_atom_to_name(cf) {
+        Some(name) => name,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let cf_handle = match db.cf_handle(cf_name) {
+        Some(cf) => cf,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    match db.put_cf(&cf_handle, key.as_slice(), value.as_slice()) {
+        Ok(()) => Ok(atoms::ok().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::put_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Deletes a key from a column family.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `cf` - The column family atom
+/// * `key` - The key to delete
+///
+/// # Returns
+/// * `:ok` on success (even if key didn't exist)
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:delete_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn delete<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    cf: rustler::Atom,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let cf_name = match cf_atom_to_name(cf) {
+        Some(name) => name,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let cf_handle = match db.cf_handle(cf_name) {
+        Some(cf) => cf,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    match db.delete_cf(&cf_handle, key.as_slice()) {
+        Ok(()) => Ok(atoms::ok().encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::delete_failed(), e.to_string())).encode(env)),
+    }
+}
+
+/// Checks if a key exists in a column family.
+///
+/// # Arguments
+/// * `db_ref` - The database reference
+/// * `cf` - The column family atom
+/// * `key` - The key to check
+///
+/// # Returns
+/// * `{:ok, true}` if key exists
+/// * `{:ok, false}` if key doesn't exist
+/// * `{:error, :already_closed}` if database is closed
+/// * `{:error, {:invalid_cf, cf}}` if column family is invalid
+/// * `{:error, {:get_failed, reason}}` on other errors
+#[rustler::nif(schedule = "DirtyCpu")]
+fn exists<'a>(
+    env: Env<'a>,
+    db_ref: ResourceArc<DbRef>,
+    cf: rustler::Atom,
+    key: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let cf_name = match cf_atom_to_name(cf) {
+        Some(name) => name,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    let db_guard = db_ref
+        .db
+        .read()
+        .map_err(|_| rustler::Error::Term(Box::new("lock poisoned")))?;
+
+    let db = match db_guard.as_ref() {
+        Some(db) => db,
+        None => return Ok((atoms::error(), atoms::already_closed()).encode(env)),
+    };
+
+    let cf_handle = match db.cf_handle(cf_name) {
+        Some(cf) => cf,
+        None => return Ok((atoms::error(), (atoms::invalid_cf(), cf)).encode(env)),
+    };
+
+    // Check if key exists by attempting to get it
+    match db.get_cf(&cf_handle, key.as_slice()) {
+        Ok(Some(_)) => Ok((atoms::ok(), true).encode(env)),
+        Ok(None) => Ok((atoms::ok(), false).encode(env)),
+        Err(e) => Ok((atoms::error(), (atoms::get_failed(), e.to_string())).encode(env)),
+    }
 }
 
 rustler::init!("Elixir.TripleStore.Backend.RocksDB.NIF");
