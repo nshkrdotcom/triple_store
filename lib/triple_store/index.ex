@@ -50,6 +50,29 @@ defmodule TripleStore.Index do
   alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Dictionary
 
+  import Bitwise, only: [<<<: 2]
+
+  # ===========================================================================
+  # Constants
+  # ===========================================================================
+
+  # Maximum valid term ID (64-bit unsigned integer)
+  @max_term_id (1 <<< 64) - 1
+
+  # Empty binary value for index entries (key contains all information)
+  @empty_value <<>>
+
+  # ===========================================================================
+  # Guards
+  # ===========================================================================
+
+  # Guard for valid term IDs (0 <= id <= max_term_id)
+  defguardp valid_term_id?(id) when is_integer(id) and id >= 0 and id <= @max_term_id
+
+  # Guard for valid triple of term IDs
+  defguardp valid_triple?(s, p, o)
+            when valid_term_id?(s) and valid_term_id?(p) and valid_term_id?(o)
+
   # ===========================================================================
   # Types
   # ===========================================================================
@@ -114,8 +137,7 @@ defmodule TripleStore.Index do
       {1, 2, 3}
   """
   @spec spo_key(term_id(), term_id(), term_id()) :: index_key()
-  def spo_key(subject, predicate, object)
-      when is_integer(subject) and is_integer(predicate) and is_integer(object) do
+  def spo_key(subject, predicate, object) when valid_triple?(subject, predicate, object) do
     <<subject::64-big, predicate::64-big, object::64-big>>
   end
 
@@ -159,7 +181,7 @@ defmodule TripleStore.Index do
       8
   """
   @spec spo_prefix(term_id()) :: binary()
-  def spo_prefix(subject) when is_integer(subject) do
+  def spo_prefix(subject) when valid_term_id?(subject) do
     <<subject::64-big>>
   end
 
@@ -183,7 +205,7 @@ defmodule TripleStore.Index do
   """
   @spec spo_prefix(term_id(), term_id()) :: binary()
   def spo_prefix(subject, predicate)
-      when is_integer(subject) and is_integer(predicate) do
+      when valid_term_id?(subject) and valid_term_id?(predicate) do
     <<subject::64-big, predicate::64-big>>
   end
 
@@ -218,8 +240,7 @@ defmodule TripleStore.Index do
       {2, 3, 1}
   """
   @spec pos_key(term_id(), term_id(), term_id()) :: index_key()
-  def pos_key(predicate, object, subject)
-      when is_integer(predicate) and is_integer(object) and is_integer(subject) do
+  def pos_key(predicate, object, subject) when valid_triple?(predicate, object, subject) do
     <<predicate::64-big, object::64-big, subject::64-big>>
   end
 
@@ -263,7 +284,7 @@ defmodule TripleStore.Index do
       8
   """
   @spec pos_prefix(term_id()) :: binary()
-  def pos_prefix(predicate) when is_integer(predicate) do
+  def pos_prefix(predicate) when valid_term_id?(predicate) do
     <<predicate::64-big>>
   end
 
@@ -287,7 +308,7 @@ defmodule TripleStore.Index do
   """
   @spec pos_prefix(term_id(), term_id()) :: binary()
   def pos_prefix(predicate, object)
-      when is_integer(predicate) and is_integer(object) do
+      when valid_term_id?(predicate) and valid_term_id?(object) do
     <<predicate::64-big, object::64-big>>
   end
 
@@ -322,8 +343,7 @@ defmodule TripleStore.Index do
       {3, 1, 2}
   """
   @spec osp_key(term_id(), term_id(), term_id()) :: index_key()
-  def osp_key(object, subject, predicate)
-      when is_integer(object) and is_integer(subject) and is_integer(predicate) do
+  def osp_key(object, subject, predicate) when valid_triple?(object, subject, predicate) do
     <<object::64-big, subject::64-big, predicate::64-big>>
   end
 
@@ -367,7 +387,7 @@ defmodule TripleStore.Index do
       8
   """
   @spec osp_prefix(term_id()) :: binary()
-  def osp_prefix(object) when is_integer(object) do
+  def osp_prefix(object) when valid_term_id?(object) do
     <<object::64-big>>
   end
 
@@ -391,7 +411,7 @@ defmodule TripleStore.Index do
   """
   @spec osp_prefix(term_id(), term_id()) :: binary()
   def osp_prefix(object, subject)
-      when is_integer(object) and is_integer(subject) do
+      when valid_term_id?(object) and valid_term_id?(subject) do
     <<object::64-big, subject::64-big>>
   end
 
@@ -491,11 +511,10 @@ defmodule TripleStore.Index do
 
   """
   @spec insert_triple(NIF.db_ref(), triple()) :: :ok | {:error, term()}
-  def insert_triple(db, {subject, predicate, object})
-      when is_integer(subject) and is_integer(predicate) and is_integer(object) do
+  def insert_triple(db, {subject, predicate, object}) when valid_triple?(subject, predicate, object) do
     operations =
       for {cf, key} <- encode_triple_keys(subject, predicate, object) do
-        {cf, key, <<>>}
+        {cf, key, @empty_value}
       end
 
     NIF.write_batch(db, operations)
@@ -533,7 +552,7 @@ defmodule TripleStore.Index do
     operations =
       for {subject, predicate, object} <- triples,
           {cf, key} <- encode_triple_keys(subject, predicate, object) do
-        {cf, key, <<>>}
+        {cf, key, @empty_value}
       end
 
     NIF.write_batch(db, operations)
@@ -567,8 +586,7 @@ defmodule TripleStore.Index do
 
   """
   @spec triple_exists?(NIF.db_ref(), triple()) :: {:ok, boolean()} | {:error, term()}
-  def triple_exists?(db, {subject, predicate, object})
-      when is_integer(subject) and is_integer(predicate) and is_integer(object) do
+  def triple_exists?(db, {subject, predicate, object}) when valid_triple?(subject, predicate, object) do
     key = spo_key(subject, predicate, object)
     NIF.exists(db, :spo, key)
   end
@@ -606,8 +624,7 @@ defmodule TripleStore.Index do
 
   """
   @spec delete_triple(NIF.db_ref(), triple()) :: :ok | {:error, term()}
-  def delete_triple(db, {subject, predicate, object})
-      when is_integer(subject) and is_integer(predicate) and is_integer(object) do
+  def delete_triple(db, {subject, predicate, object}) when valid_triple?(subject, predicate, object) do
     operations =
       for {cf, key} <- encode_triple_keys(subject, predicate, object) do
         {cf, key}
@@ -680,6 +697,19 @@ defmodule TripleStore.Index do
   | `{:bound, :var, :bound}` | OSP | O-S | Object-subject prefix, filter by P |
   | `{:var, :var, :var}` | SPO | Empty | Full scan |
 
+  ## Performance Notes
+
+  The **S?O pattern** (`{:bound, :var, :bound}`) is the only pattern that requires
+  post-filtering. It uses the OSP index with an O-S prefix, then filters results
+  by predicate. This means performance may degrade for graphs where a given
+  subject-object pair has many different predicates. For most RDF graphs this is
+  rare, but queries like `SELECT ?p WHERE { :entity1 ?p :entity2 }` will scan
+  all predicates between two entities.
+
+  For time-critical queries, consider if the pattern can be restructured to avoid
+  S?O, or accept that this pattern has O(n) filtering where n is the number of
+  predicates between the subject-object pair.
+
   ## Arguments
 
   - `pattern` - A tuple of three pattern elements, each being `{:bound, id}` or `:var`
@@ -704,7 +734,8 @@ defmodule TripleStore.Index do
   @spec select_index(pattern()) :: index_selection()
 
   # Pattern: SPO - all bound (exact lookup)
-  def select_index({{:bound, s}, {:bound, p}, {:bound, o}}) do
+  def select_index({{:bound, s}, {:bound, p}, {:bound, o}})
+      when valid_triple?(s, p, o) do
     %{
       index: :spo,
       prefix: spo_key(s, p, o),
@@ -714,7 +745,8 @@ defmodule TripleStore.Index do
   end
 
   # Pattern: SP? - subject and predicate bound
-  def select_index({{:bound, s}, {:bound, p}, :var}) do
+  def select_index({{:bound, s}, {:bound, p}, :var})
+      when valid_term_id?(s) and valid_term_id?(p) do
     %{
       index: :spo,
       prefix: spo_prefix(s, p),
@@ -724,7 +756,7 @@ defmodule TripleStore.Index do
   end
 
   # Pattern: S?? - only subject bound
-  def select_index({{:bound, s}, :var, :var}) do
+  def select_index({{:bound, s}, :var, :var}) when valid_term_id?(s) do
     %{
       index: :spo,
       prefix: spo_prefix(s),
@@ -734,7 +766,8 @@ defmodule TripleStore.Index do
   end
 
   # Pattern: ?PO - predicate and object bound
-  def select_index({:var, {:bound, p}, {:bound, o}}) do
+  def select_index({:var, {:bound, p}, {:bound, o}})
+      when valid_term_id?(p) and valid_term_id?(o) do
     %{
       index: :pos,
       prefix: pos_prefix(p, o),
@@ -744,7 +777,7 @@ defmodule TripleStore.Index do
   end
 
   # Pattern: ?P? - only predicate bound
-  def select_index({:var, {:bound, p}, :var}) do
+  def select_index({:var, {:bound, p}, :var}) when valid_term_id?(p) do
     %{
       index: :pos,
       prefix: pos_prefix(p),
@@ -754,7 +787,7 @@ defmodule TripleStore.Index do
   end
 
   # Pattern: ??O - only object bound
-  def select_index({:var, :var, {:bound, o}}) do
+  def select_index({:var, :var, {:bound, o}}) when valid_term_id?(o) do
     %{
       index: :osp,
       prefix: osp_prefix(o),
@@ -765,7 +798,9 @@ defmodule TripleStore.Index do
 
   # Pattern: S?O - subject and object bound (requires filtering)
   # Uses OSP index with O-S prefix, then filters by predicate
-  def select_index({{:bound, s}, :var, {:bound, o}}) do
+  # Note: This is the only pattern requiring post-filtering. See Performance Notes above.
+  def select_index({{:bound, s}, :var, {:bound, o}})
+      when valid_term_id?(s) and valid_term_id?(o) do
     %{
       index: :osp,
       prefix: osp_prefix(o, s),
@@ -870,23 +905,17 @@ defmodule TripleStore.Index do
   def lookup(db, pattern) do
     %{index: index, prefix: prefix, needs_filter: needs_filter} = select_index(pattern)
 
-    case NIF.prefix_stream(db, index, prefix) do
-      {:ok, stream} ->
-        decoded_stream =
-          stream
-          |> Stream.map(fn {key, _value} -> key_to_triple(index, key) end)
+    with {:ok, stream} <- NIF.prefix_stream(db, index, prefix) do
+      decoded_stream = Stream.map(stream, fn {key, _value} -> key_to_triple(index, key) end)
 
-        final_stream =
-          if needs_filter do
-            Stream.filter(decoded_stream, &triple_matches_pattern?(&1, pattern))
-          else
-            decoded_stream
-          end
+      final_stream =
+        if needs_filter do
+          Stream.filter(decoded_stream, &triple_matches_pattern?(&1, pattern))
+        else
+          decoded_stream
+        end
 
-        {:ok, final_stream}
-
-      {:error, _} = error ->
-        error
+      {:ok, final_stream}
     end
   end
 

@@ -334,6 +334,19 @@ All tests implemented across individual task test files:
 - [x] Test pattern `{:bound, :var, :bound}` subject-object with filter (index_lookup_test.exs)
 - [x] Test pattern `{:var, :var, :var}` full scan (index_lookup_test.exs)
 
+### 1.4.7 Review Improvements
+
+- [x] **Task 1.4.7 Complete** (2025-12-21)
+
+Following the comprehensive review of Section 1.4, the following improvements were implemented:
+
+- [x] 1.4.7.1 Add term_id bounds validation with `valid_term_id?` guard (0 <= id <= 2^64-1)
+- [x] 1.4.7.2 Add `@empty_value` compile-time constant for index values
+- [x] 1.4.7.3 Document S?O pattern performance characteristics in `select_index/1`
+- [x] 1.4.7.4 Add guards to all `select_index/1` pattern clauses
+- [x] 1.4.7.5 Refactor `lookup/2` to use `with` for cleaner control flow
+- [x] 1.4.7.6 Create `test/support/index_test_helper.ex` for shared test utilities
+
 ---
 
 ## 1.5 RDF.ex Integration
