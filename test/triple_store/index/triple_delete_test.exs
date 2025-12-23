@@ -10,24 +10,9 @@ defmodule TripleStore.Index.TripleDeleteTest do
   - Edge cases are handled properly
   """
 
-  use ExUnit.Case, async: false
+  use TripleStore.PooledDbCase
 
-  alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Index
-
-  @test_db_base "/tmp/triple_store_index_delete_test"
-
-  setup do
-    test_path = "#{@test_db_base}_#{:erlang.unique_integer([:positive])}"
-    {:ok, db} = NIF.open(test_path)
-
-    on_exit(fn ->
-      NIF.close(db)
-      File.rm_rf(test_path)
-    end)
-
-    {:ok, db: db, path: test_path}
-  end
 
   # ===========================================================================
   # delete_triple/2

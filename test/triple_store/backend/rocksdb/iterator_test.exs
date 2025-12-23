@@ -2,23 +2,7 @@ defmodule TripleStore.Backend.RocksDB.IteratorTest do
   @moduledoc """
   Tests for RocksDB Iterator operations (Task 1.2.4).
   """
-  use ExUnit.Case, async: false
-
-  alias TripleStore.Backend.RocksDB.NIF
-
-  @test_db_base "/tmp/triple_store_iterator_test"
-
-  setup do
-    test_path = "#{@test_db_base}_#{:erlang.unique_integer([:positive])}"
-    {:ok, db} = NIF.open(test_path)
-
-    on_exit(fn ->
-      NIF.close(db)
-      File.rm_rf(test_path)
-    end)
-
-    {:ok, db: db, path: test_path}
-  end
+  use TripleStore.PooledDbCase
 
   describe "prefix_iterator/3" do
     test "creates an iterator for a column family", %{db: db} do
@@ -49,7 +33,7 @@ defmodule TripleStore.Backend.RocksDB.IteratorTest do
       assert {:error, {:invalid_cf, :nonexistent}} = NIF.prefix_iterator(db, :nonexistent, "")
     end
 
-    test "returns error for closed database", %{path: path} do
+    test "returns error for closed database", %{db_path: path} do
       {:ok, db2} = NIF.open("#{path}_closed")
       NIF.close(db2)
 

@@ -2,23 +2,7 @@ defmodule TripleStore.Backend.RocksDB.SnapshotTest do
   @moduledoc """
   Tests for RocksDB Snapshot operations (Task 1.2.5).
   """
-  use ExUnit.Case, async: false
-
-  alias TripleStore.Backend.RocksDB.NIF
-
-  @test_db_base "/tmp/triple_store_snapshot_test"
-
-  setup do
-    test_path = "#{@test_db_base}_#{:erlang.unique_integer([:positive])}"
-    {:ok, db} = NIF.open(test_path)
-
-    on_exit(fn ->
-      NIF.close(db)
-      File.rm_rf(test_path)
-    end)
-
-    {:ok, db: db, path: test_path}
-  end
+  use TripleStore.PooledDbCase
 
   describe "snapshot/1" do
     test "creates a snapshot", %{db: db} do
@@ -27,7 +11,7 @@ defmodule TripleStore.Backend.RocksDB.SnapshotTest do
       NIF.release_snapshot(snap)
     end
 
-    test "returns error for closed database", %{path: path} do
+    test "returns error for closed database", %{db_path: path} do
       {:ok, db2} = NIF.open("#{path}_closed")
       NIF.close(db2)
 
@@ -166,6 +150,7 @@ defmodule TripleStore.Backend.RocksDB.SnapshotTest do
 
     test "returns error for invalid column family", %{db: db} do
       {:ok, snap} = NIF.snapshot(db)
+
       assert {:error, {:invalid_cf, :nonexistent}} =
                NIF.snapshot_prefix_iterator(snap, :nonexistent, "")
 
