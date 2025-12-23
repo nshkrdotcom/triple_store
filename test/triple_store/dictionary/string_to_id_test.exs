@@ -11,6 +11,8 @@ defmodule TripleStore.Dictionary.StringToIdTest do
   """
   use TripleStore.PooledDbCase
 
+  alias RDF.NS.XSD
+
   alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Dictionary
   alias TripleStore.Dictionary.Manager
@@ -89,7 +91,7 @@ defmodule TripleStore.Dictionary.StringToIdTest do
     end
 
     test "encodes typed literal with explicit xsd:string" do
-      literal = RDF.literal("hello", datatype: RDF.NS.XSD.string())
+      literal = RDF.literal("hello", datatype: XSD.string())
       {:ok, key} = StringToId.encode_term(literal)
       # Typed literals use subtype 1 with datatype URI
       assert <<3, 1, rest::binary>> = key

@@ -209,9 +209,9 @@ defmodule TripleStore.Index.TripleDeleteTest do
       {:ok, osp_entries} = NIF.iterator_collect(osp_iter)
       NIF.iterator_close(osp_iter)
 
-      assert length(spo_entries) == 0
-      assert length(pos_entries) == 0
-      assert length(osp_entries) == 0
+      assert Enum.empty?(spo_entries)
+      assert Enum.empty?(pos_entries)
+      assert Enum.empty?(osp_entries)
     end
   end
 

@@ -331,6 +331,120 @@ defmodule TripleStore.Backend.RocksDB.SnapshotTest do
     end
   end
 
+  describe "snapshot lifetime safety" do
+    @tag :lifetime_safety
+    test "snapshot continues to work after database close()", %{db_path: path} do
+      # This test verifies the fix for the use-after-free bug documented in
+      # docs/20251222/rocksdb-close-lifetime-risk.md
+      #
+      # Previously, calling close() would drop the DB while snapshots still held
+      # pointers to it, causing use-after-free. The fix stores Arc<SharedDb> in
+      # snapshots, so the DB stays alive until all snapshots are dropped.
+
+      {:ok, db} = NIF.open("#{path}_snap_lifetime")
+
+      NIF.put(db, :spo, "key1", "value1")
+      NIF.put(db, :spo, "key2", "value2")
+
+      # Create snapshot BEFORE closing the database
+      {:ok, snap} = NIF.snapshot(db)
+
+      # Close the database
+      assert :ok = NIF.close(db)
+
+      # Snapshot should still work because it holds its own Arc<SharedDb> reference
+      assert {:ok, "value1"} = NIF.snapshot_get(snap, :spo, "key1")
+      assert {:ok, "value2"} = NIF.snapshot_get(snap, :spo, "key2")
+
+      NIF.release_snapshot(snap)
+      File.rm_rf("#{path}_snap_lifetime")
+    end
+
+    @tag :lifetime_safety
+    test "snapshot_prefix_iterator works after database close()", %{db_path: path} do
+      {:ok, db} = NIF.open("#{path}_snap_iter_lifetime")
+
+      NIF.put(db, :spo, "key1", "value1")
+      NIF.put(db, :spo, "key2", "value2")
+
+      {:ok, snap} = NIF.snapshot(db)
+      {:ok, iter} = NIF.snapshot_prefix_iterator(snap, :spo, "key")
+
+      # Close the database
+      assert :ok = NIF.close(db)
+
+      # Iterator should still work
+      assert {:ok, "key1", "value1"} = NIF.snapshot_iterator_next(iter)
+      assert {:ok, "key2", "value2"} = NIF.snapshot_iterator_next(iter)
+      assert :iterator_end = NIF.snapshot_iterator_next(iter)
+
+      NIF.snapshot_iterator_close(iter)
+      NIF.release_snapshot(snap)
+      File.rm_rf("#{path}_snap_iter_lifetime")
+    end
+
+    @tag :lifetime_safety
+    test "snapshot iterator created after close works", %{db_path: path} do
+      {:ok, db} = NIF.open("#{path}_snap_iter_after_close")
+
+      NIF.put(db, :spo, "key1", "value1")
+      NIF.put(db, :spo, "key2", "value2")
+
+      {:ok, snap} = NIF.snapshot(db)
+
+      # Close the database first
+      assert :ok = NIF.close(db)
+
+      # Create iterator AFTER close - should still work
+      {:ok, iter} = NIF.snapshot_prefix_iterator(snap, :spo, "key")
+
+      {:ok, results} = NIF.snapshot_iterator_collect(iter)
+      assert length(results) == 2
+      assert {"key1", "value1"} in results
+      assert {"key2", "value2"} in results
+
+      NIF.snapshot_iterator_close(iter)
+      NIF.release_snapshot(snap)
+      File.rm_rf("#{path}_snap_iter_after_close")
+    end
+
+    @tag :lifetime_safety
+    test "multiple snapshots and iterators work after database close()", %{db_path: path} do
+      {:ok, db} = NIF.open("#{path}_multi_snap_lifetime")
+
+      NIF.put(db, :spo, "key1", "v1")
+      {:ok, snap1} = NIF.snapshot(db)
+
+      NIF.put(db, :spo, "key2", "v2")
+      {:ok, snap2} = NIF.snapshot(db)
+
+      {:ok, iter1} = NIF.snapshot_prefix_iterator(snap1, :spo, "")
+      {:ok, iter2} = NIF.snapshot_prefix_iterator(snap2, :spo, "")
+
+      # Close the database
+      assert :ok = NIF.close(db)
+
+      # All snapshots and iterators should still work
+      assert {:ok, "v1"} = NIF.snapshot_get(snap1, :spo, "key1")
+      assert :not_found = NIF.snapshot_get(snap1, :spo, "key2")
+
+      assert {:ok, "v1"} = NIF.snapshot_get(snap2, :spo, "key1")
+      assert {:ok, "v2"} = NIF.snapshot_get(snap2, :spo, "key2")
+
+      {:ok, results1} = NIF.snapshot_iterator_collect(iter1)
+      {:ok, results2} = NIF.snapshot_iterator_collect(iter2)
+
+      assert length(results1) == 1
+      assert length(results2) == 2
+
+      NIF.snapshot_iterator_close(iter1)
+      NIF.snapshot_iterator_close(iter2)
+      NIF.release_snapshot(snap1)
+      NIF.release_snapshot(snap2)
+      File.rm_rf("#{path}_multi_snap_lifetime")
+    end
+  end
+
   describe "snapshot isolation" do
     test "multiple snapshots see different data", %{db: db} do
       NIF.put(db, :spo, "key", "v1")

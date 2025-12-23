@@ -8,6 +8,7 @@ defmodule TripleStore.Index.TestHelper do
 
   alias TripleStore.Backend.RocksDB.NIF
   alias TripleStore.Index
+  alias TripleStore.Test.DbPool
 
   @doc """
   Checks out a pooled test database.
@@ -26,7 +27,7 @@ defmodule TripleStore.Index.TestHelper do
   """
   @spec setup_test_db(String.t()) :: %{db: NIF.db_ref(), path: String.t(), id: integer()}
   def setup_test_db(_base_name) do
-    TripleStore.Test.DbPool.checkout()
+    DbPool.checkout()
   end
 
   @doc """
@@ -42,7 +43,7 @@ defmodule TripleStore.Index.TestHelper do
   """
   @spec cleanup_test_db(%{db: NIF.db_ref(), path: String.t(), id: integer()}) :: :ok
   def cleanup_test_db(db_info) do
-    TripleStore.Test.DbPool.checkin(db_info)
+    DbPool.checkin(db_info)
     :ok
   end
 
